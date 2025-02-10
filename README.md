@@ -32,3 +32,17 @@ Below you find a basic tutorial on how to use the package.
 #### Tutorial
 
 Check the basic tutorial [here](docs/basic_tutorial/basic_tutorial.ipynb).
+
+### Dependency Management with uv
+
+We use `uv` for fast and efficient dependency management. To get started:
+
+1. Install `uv`:
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+2. Install dependencies (including development):
+```bash
+uv sync --all-groups  # Installs all dependency groups
+```
