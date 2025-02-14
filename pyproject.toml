@@ -32,7 +32,15 @@ classifiers = [
 ]
 
 [dependency-groups]
-dev = ["pytest", "mypy", "black", "ruff", "pre-commit"]
+dev = [
+    "pytest",
+    "mypy",
+    "black",
+    "ruff",
+    "pre-commit",
+    "pytest-cov>=6.0.0",
+    "pytest-xdist>=3.6.1",
+]
 
 [project.urls]
 Homepage = "https://github.com/AlexanderFengler/ssm-simulators"
