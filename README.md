@@ -7,6 +7,7 @@ Find the package documentation [here](https://alexanderfengler.github.io/ssm-sim
 ![PyPI_dl](https://img.shields.io/pypi/dm/ssm-simulators)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/ambv/black)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![codecov](https://codecov.io/gh/lnccbrown/ssm-simulators/branch/main/graph/badge.svg)](https://codecov.io/gh/lnccbrown/ssm-simulators)
 
 ### Quick Start
 
