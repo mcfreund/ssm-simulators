@@ -11,8 +11,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        # python-version: ["3.10", "3.11"]
-        python-version: ["3.11"]
+        python-version: ["3.10", "3.11"]
 
     steps:
       - uses: actions/checkout@v4
@@ -27,6 +26,7 @@ jobs:
         with:
           version: "0.5.9"
           enable-cache: true
+          cache-dependency-glob: "pyproject.toml pdm.lock"
 
       - name: Install package
         run: uv sync --all-groups
