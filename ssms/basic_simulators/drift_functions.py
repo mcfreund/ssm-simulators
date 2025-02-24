@@ -1,13 +1,14 @@
 """Define a collection of drift functions for the simulators in the package."""
 
 # External
-from typing import Callable
+from collections.abc import Callable
 
 import numpy as np
 from scipy.stats import norm
 
 
-def constant(t: np.ndarray = np.arange(0, 20, 0.1)) -> np.ndarray:
+# TODO: #81 B008 Do not perform function call `np.arange` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable  # noqa: B008, FIX002
+def constant(t: np.ndarray = np.arange(0, 20, 0.1)) -> np.ndarray:  # noqa: B008
     """Constant drift function.
 
     Arguments
@@ -24,7 +25,9 @@ def constant(t: np.ndarray = np.arange(0, 20, 0.1)) -> np.ndarray:
 
 
 def gamma_drift(
-    t: np.ndarray = np.arange(0, 20, 0.1),
+    t: np.ndarray = np.arange(  # noqa: B008
+        0, 20, 0.1
+    ),  # TODO: #81 B008 Do not perform function call `np.arange` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable  # noqa: B008, FIX002
     shape: float = 2,
     scale: float = 0.01,
     c: float = 1.5,
@@ -61,7 +64,9 @@ def gamma_drift(
 
 
 def ds_support_analytic(
-    t: np.ndarray = np.arange(0, 10, 0.001),
+    t: np.ndarray = np.arange(  # noqa: B008
+        0, 10, 0.001
+    ),  # TODO: #81 B008 Do not perform function call `np.arange` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable  # noqa: B008, FIX002
     init_p: float = 0,
     fix_point: float = 1,
     slope: float = 2,
@@ -93,7 +98,9 @@ def ds_support_analytic(
 
 
 def ds_conflict_drift(
-    t: np.ndarray = np.arange(0, 10, 0.001),
+    t: np.ndarray = np.arange(  # noqa: B008
+        0, 10, 0.001
+    ),  # TODO: #81 B008 Do not perform function call `np.arange` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable  # noqa: B008, FIX002
     tinit: float = 0,
     dinit: float = 0,
     tslope: float = 1,
@@ -145,7 +152,9 @@ def ds_conflict_drift(
 
 
 def attend_drift(
-    t: np.ndarray = np.arange(0, 20, 0.1),
+    t: np.ndarray = np.arange(  # noqa: B008
+        0, 20, 0.1
+    ),  # TODO: #81 B008 Do not perform function call `np.arange` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable  # noqa: B008, FIX002
     ptarget: float = -0.3,
     pouter: float = -0.3,
     pinner: float = 0.3,
@@ -189,7 +198,9 @@ def attend_drift(
 
 
 def attend_drift_simple(
-    t: np.ndarray = np.arange(0, 20, 0.1),
+    t: np.ndarray = np.arange(  # noqa: B008
+        0, 20, 0.1
+    ),  # TODO: #81 B008 Do not perform function call `np.arange` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable  # noqa: B008, FIX002
     ptarget: float = -0.3,
     pouter: float = -0.3,
     r: float = 0.5,
