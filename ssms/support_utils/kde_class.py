@@ -229,8 +229,12 @@ class LogKDE:
 
     # TODO: #81 B008 Do not perform function call `np.arange` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable  # noqa: B006, FIX002
     def _kde_eval_(
-        self, data={}, log_eval=True, lb=-66.774, eps=10e-5  # noqa: B006
-    ):  # kde  # noqa: B006
+        self,
+        data={},  # noqa: B006
+        log_eval=True,
+        lb=-66.774,
+        eps=10e-5,
+    ):  # kde
         """
         Evaluates kde log likelihood at chosen points.
 
@@ -296,7 +300,11 @@ class LogKDE:
 
     # Function to evaluate the kde log likelihood at chosen points
     def _kde_eval_log_rt(
-        self, data={}, log_eval=True, lb=-66.774, eps=10e-5  # noqa: B006
+        self,
+        data={},  # noqa: B006
+        log_eval=True,
+        lb=-66.774,
+        eps=10e-5,
     ):  # kde # TODO: #81 B008 Do not perform function call `np.arange` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable  # noqa: B006, FIX002
         """
         Evaluates kde log likelihood at chosen points.
