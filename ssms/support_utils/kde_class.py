@@ -1,7 +1,8 @@
 # KDE GENERATORS
+from copy import deepcopy
+
 import numpy as np
 from sklearn.neighbors import KernelDensity
-from copy import deepcopy
 
 # from ssms.basic_simulators import simulator
 
@@ -153,7 +154,8 @@ class LogKDE:
                 )
 
     # Function to evaluate the kde log likelihood at chosen points
-    def kde_eval(self, data={}, log_eval=True, lb=-66.774, eps=10e-5, filter_rts=-999):
+    # TODO: #81 B008 Do not perform function call `np.arange` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable  # noqa: B006, FIX002
+    def kde_eval(self, data={}, log_eval=True, lb=-66.774, eps=10e-5, filter_rts=-999):  # noqa: B006
         """
         Evaluates kde log likelihood at chosen points.
 
@@ -187,9 +189,9 @@ class LogKDE:
             data_internal["choices"] = np.expand_dims(
                 data["choices"][data["log_rts"] != filter_rts], axis=1
             )
-            assert data["log_rts"].shape == data["choices"].shape, (
+            assert data["log_rts"].shape == data["choices"].shape, (  # noqa: S101
                 "rts and choices need to have matching shapes in data dictionary!"
-            )
+            ) # TODO: #84 Replace with exception  # noqa: FIX002
             return self._kde_eval_log_rt(
                 data=data_internal, log_eval=log_eval, lb=lb, eps=eps
             )
@@ -200,9 +202,9 @@ class LogKDE:
             data_internal["choices"] = np.expand_dims(
                 data["choices"][data["rts"] != filter_rts], axis=1
             )
-            assert data_internal["rts"].shape == data_internal["choices"].shape, (
+            assert data_internal["rts"].shape == data_internal["choices"].shape, (  # noqa: S101
                 "rts and choices need to have matching shapes in data dictionary!"
-            )
+            ) # TODO: #84 Replace with exception  # noqa: FIX002
             return self._kde_eval_(
                 data=data_internal, log_eval=log_eval, lb=lb, eps=eps
             )
@@ -213,9 +215,9 @@ class LogKDE:
             data_internal["choices"] = np.expand_dims(
                 data["choices"][data["rts"] != filter_rts], axis=1
             )
-            assert data_internal["rts"].shape == data_internal["choices"].shape, (
+            assert data_internal["rts"].shape == data_internal["choices"].shape, (  # noqa: S101
                 "rts and choices need to have matching shapes in data dictionary!"
-            )
+            ) # TODO: #84 Replace with exception  # noqa: FIX002
             return self._kde_eval_(
                 data=data_internal, log_eval=log_eval, lb=lb, eps=eps
             )
@@ -224,7 +226,8 @@ class LogKDE:
                 "data dictionary must contain either rts or log_rts as keys!"
             )
 
-    def _kde_eval_(self, data={}, log_eval=True, lb=-66.774, eps=10e-5):  # kde
+    # TODO: #81 B008 Do not perform function call `np.arange` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable  # noqa: B006, FIX002
+    def _kde_eval_(self, data={}, log_eval=True, lb=-66.774, eps=10e-5):  # kde  # noqa: B006
         """
         Evaluates kde log likelihood at chosen points.
 
@@ -289,7 +292,7 @@ class LogKDE:
             return np.squeeze(np.exp(log_kde_eval))
 
     # Function to evaluate the kde log likelihood at chosen points
-    def _kde_eval_log_rt(self, data={}, log_eval=True, lb=-66.774, eps=10e-5):  # kde
+    def _kde_eval_log_rt(self, data={}, log_eval=True, lb=-66.774, eps=10e-5):  # kde # TODO: #81 B008 Do not perform function call `np.arange` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable  # noqa: B006, FIX002
         """
         Evaluates kde log likelihood at chosen points.
 
@@ -497,7 +500,7 @@ class LogKDE:
 
 # Support functions (accessible from outside the main class defined in script)
 def bandwidth_silverman(
-    sample=[0, 0, 0],
+    sample=[0, 0, 0], # TODO: #81 B008 Do not perform function call `np.arange` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable  # noqa: B006, B008, FIX002
     std_cutoff=1e-3,
     std_proc="restrict",  # options 'kill', 'restrict'
     std_n_1=10,  # HERE WE CAN ALLOW FOR SOMETHING MORE INTELLIGENT
