@@ -28,12 +28,12 @@ sample_parameters_from_constraints(param_dict: Dict[str, Tuple[Any, Any]],
 """  # noqa: D205, D404
 
 from collections import defaultdict
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any
 
 import numpy as np
 
 
-def parse_bounds(bounds: Tuple[Any, Any]) -> Set[str]:
+def parse_bounds(bounds: tuple[Any, Any]) -> set[str]:
     """
     Parse the bounds of a parameter and extract any dependencies.
 
@@ -54,8 +54,8 @@ def parse_bounds(bounds: Tuple[Any, Any]) -> Set[str]:
 
 
 def build_dependency_graph(
-    param_dict: Dict[str, Tuple[Any, Any]],
-) -> Dict[str, Set[str]]:
+    param_dict: dict[str, tuple[Any, Any]],
+) -> dict[str, set[str]]:
     """
     Build a dependency graph based on parameter bounds.
 
@@ -78,7 +78,7 @@ def build_dependency_graph(
     # e.g.
     # param_dict = {'a': (0, 5), 'b': (0, 'a'), 'c': ('b', 'a')}
     # resulting graph = {'a': {'b', 'c'}, 'b': {'c'}, 'c': set()}
-    graph: Dict[str, Set[str]] = defaultdict(set)
+    graph: dict[str, set[str]] = defaultdict(set)
     all_params = set(param_dict.keys())
     for param, bounds in param_dict.items():
         dependencies = parse_bounds(bounds)
@@ -97,10 +97,10 @@ def build_dependency_graph(
 
 def topological_sort_util(
     node: str,
-    visited: Set[str],
-    stack: List[str],
-    graph: Dict[str, Set[str]],
-    temp_marks: Set[str],
+    visited: set[str],
+    stack: list[str],
+    graph: dict[str, set[str]],
+    temp_marks: set[str],
 ) -> None:
     """
     Helper function for performing a depth-first search in the topological sort.
@@ -130,7 +130,7 @@ def topological_sort_util(
         stack.insert(0, node)  # Prepend node to the stack
 
 
-def topological_sort(graph: Dict[str, Set[str]]) -> List[str]:
+def topological_sort(graph: dict[str, set[str]]) -> list[str]:
     """
     Perform a topological sort on the dependency graph to determine the sampling order.
 
@@ -146,9 +146,9 @@ def topological_sort(graph: Dict[str, Set[str]]) -> List[str]:
     ------
         ValueError: If a circular dependency is detected.
     """
-    visited: Set[str] = set()
-    temp_marks: Set[str] = set()
-    stack: List[str] = []
+    visited: set[str] = set()
+    temp_marks: set[str] = set()
+    stack: list[str] = []
     for node in graph:
         if node not in visited:
             topological_sort_util(node, visited, stack, graph, temp_marks)
@@ -156,8 +156,8 @@ def topological_sort(graph: Dict[str, Set[str]]) -> List[str]:
 
 
 def sample_parameters_from_constraints(
-    param_dict: Dict[str, Tuple[Any, Any]], sample_size: int
-) -> Dict[str, np.ndarray]:
+    param_dict: dict[str, tuple[Any, Any]], sample_size: int
+) -> dict[str, np.ndarray]:
     """
     Sample parameters uniformly within specified bounds, respecting any dependencies.
 
@@ -183,7 +183,7 @@ def sample_parameters_from_constraints(
     except ValueError as e:
         raise ValueError(f"Error in topological sorting: {e}") from e
 
-    samples: Dict[str, np.ndarray] = {}
+    samples: dict[str, np.ndarray] = {}
     for param in sampling_order:
         # print('sampling :', param)
         bounds = param_dict.get(param)
@@ -209,7 +209,7 @@ def sample_parameters_from_constraints(
                 )
 
         # Ensure lower bound is less than upper bound
-        # TODO: Improve this test to not only operate on sampled but on strict checks!
+        # TODO: #83 Improve this test to not only operate on sampled but on strict checks!  # noqa: FIX002
         if np.any(lower >= upper):
             raise ValueError(
                 f"Lower bound '{lower}' must be less than upper bound '{upper}' for parameter '{param}'."  # noqa: E501
