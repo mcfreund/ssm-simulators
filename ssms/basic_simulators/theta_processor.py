@@ -15,7 +15,7 @@ and number of trials.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict
+from typing import Any
 
 import numpy as np
 
@@ -25,8 +25,8 @@ class AbstractThetaProcessor(ABC):
 
     @abstractmethod
     def process_theta(
-        self, theta: Dict[str, Any], model_config: Dict[str, Any], n_trials: int
-    ) -> Dict[str, Any]:
+        self, theta: dict[str, Any], model_config: dict[str, Any], n_trials: int
+    ) -> dict[str, Any]:
         """
         Abstract method to process theta parameters.
 
@@ -50,8 +50,8 @@ class SimpleThetaProcessor(AbstractThetaProcessor):
     """
 
     def process_theta(
-        self, theta: Dict[str, Any], model_config: Dict[str, Any], n_trials: int
-    ) -> Dict[str, Any]:
+        self, theta: dict[str, Any], model_config: dict[str, Any], n_trials: int
+    ) -> dict[str, Any]:
         """
         Process theta parameters based on the model configuration.
 
