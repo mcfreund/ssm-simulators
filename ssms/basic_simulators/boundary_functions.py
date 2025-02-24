@@ -1,18 +1,18 @@
+"""Define a collection of boundary functions for the simulators in the package."""
+
 # External
-from scipy.stats import gamma
+from collections.abc import Callable
+
 import numpy as np
-from typing import Callable
+from scipy.stats import gamma  # type: ignore
 
 # Collection of boundary functions
 
-"""
-Module defines a collection of boundary functions for the simulators in the package.
-"""
 
-
+# TODO: #82 Revise how the constant function is implemented. It is not clear what it's supposed to do.  # noqa: FIX002
 # Constant: (multiplicative)
-def constant(t: float | np.ndarray = 0) -> float | np.ndarray:
-    """constant boundary function
+def constant(t: float | np.ndarray = 0) -> float | np.ndarray:  # noqa: ARG001
+    """Constant boundary function.
 
     Arguments
     ---------
@@ -27,7 +27,7 @@ def constant(t: float | np.ndarray = 0) -> float | np.ndarray:
 
 # Angle (additive)
 def angle(t: float | np.ndarray = 1, theta: float = 1) -> np.ndarray:
-    """angle boundary function
+    """Angle boundary function.
 
     Arguments
     ---------
@@ -43,16 +43,20 @@ def angle(t: float | np.ndarray = 1, theta: float = 1) -> np.ndarray:
 
 # Generalized logistic bound (additive)
 def generalized_logistic(
-    t: float | np.ndarray = 1, B: float = 2.0, M: float = 3.0, v: float = 0.5
+    t: float | np.ndarray = 1,
+    B: float = 2.0,  # noqa: N803
+    M: float = 3.0,  # noqa: N803
+    v: float = 0.5,  # noqa: N803
 ) -> np.ndarray:
-    """generalized logistic bound
+    """Generalized logistic bound.
 
     Arguments
     ---------
         t (float or np.ndarray, optional): Time point(s). Defaults to 1.
         B (float, optional): Growth rate. Defaults to 2.0.
         M (float, optional): Time of maximum growth. Defaults to 3.0.
-        v (float, optional): Affects near which asymptote maximum growth occurs. Defaults to 0.5.
+        v (float, optional): Affects near which asymptote maximum growth occurs.
+        Defaults to 0.5.
 
     Returns
     -------
@@ -65,7 +69,7 @@ def generalized_logistic(
 def weibull_cdf(
     t: float | np.ndarray = 1, alpha: float = 1, beta: float = 1
 ) -> np.ndarray:
-    """boundary based on weibull survival function.
+    """Boundary based on weibull survival function.
 
     Arguments
     ---------
@@ -81,13 +85,15 @@ def weibull_cdf(
 
 
 def conflict_gamma(
-    t: float | np.ndarray = np.arange(0, 20, 0.1),
+    t: float | np.ndarray = np.arange(  # noqa: B008
+        0, 20, 0.1
+    ),  # TODO: #81 B008 Do not perform function call `np.arange` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable  # noqa: B008, FIX002
     theta: float = 0.5,
     scale: float = 1,
     alpha_gamma: float = 1.01,
     scale_gamma: float = 0.3,
 ) -> np.ndarray:
-    """conflict bound that allows initial divergence then collapse
+    """Conflict bound that allows initial divergence then collapse.
 
     Arguments
     ---------
@@ -102,7 +108,6 @@ def conflict_gamma(
         alpha_gamma: float
             alpha parameter for a gamma in scale shape parameterization. Defaults to
     """
-
     return (
         scale * gamma.pdf(t, a=alpha_gamma, loc=0, scale=scale_gamma)
         + np.multiply(t, (-np.sin(theta) / np.cos(theta))),
@@ -112,8 +117,8 @@ def conflict_gamma(
 # Define Type alias for boundary functions
 BoundaryFunction = Callable[..., np.ndarray]
 
-constant: BoundaryFunction = constant
-angle: BoundaryFunction = angle
-generalized_logistic: BoundaryFunction = generalized_logistic
-weibull_cdf: BoundaryFunction = weibull_cdf
-conflict_gamma: BoundaryFunction = conflict_gamma
+constant: BoundaryFunction = constant  # noqa: PLW0127
+angle: BoundaryFunction = angle  # noqa: PLW0127
+generalized_logistic: BoundaryFunction = generalized_logistic  # noqa: PLW0127
+weibull_cdf: BoundaryFunction = weibull_cdf  # noqa: PLW0127
+conflict_gamma: BoundaryFunction = conflict_gamma  # noqa: PLW0127

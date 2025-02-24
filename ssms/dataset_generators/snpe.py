@@ -1,11 +1,13 @@
-from ssms.basic_simulators.simulator import simulator
-import numpy as np
 import pickle
 import uuid
-import os
-from multiprocessing import Pool
-from ssms.dataset_generators.lan_mlp import data_generator
 from functools import partial
+from multiprocessing import Pool
+from pathlib import Path
+
+import numpy as np
+
+from ssms.basic_simulators.simulator import simulator
+from ssms.dataset_generators.lan_mlp import data_generator
 
 """
     This module defines a data generator class for SNPE.
@@ -13,7 +15,8 @@ from functools import partial
 """
 
 
-class data_generator_snpe(data_generator):
+# TODO: #78 Class name `data_generator_snpe` should use CapWords convention  # noqa: FIX002
+class data_generator_snpe(data_generator):  # noqa: N801
     """
 
     Class for generating data for SNPE.
@@ -62,13 +65,12 @@ class data_generator_snpe(data_generator):
             with Pool(processes=self.generator_config["n_cpus"] - 1) as pool:
                 data_tmp = pool.map(
                     self._snpe_get_processed_data_for_theta,
-                    [k for k in seed_args[(i * subrun_n) : ((i + 1) * subrun_n)]],
+                    list(seed_args[(i * subrun_n) : ((i + 1) * subrun_n)]),
                 )
                 data = {
                     **data,
                     **{
-                        i
-                        + cum_i: {
+                        i + cum_i: {
                             "data": data_tmp[i]["features"],
                             "labels": data_tmp[i]["labels"],
                         }
@@ -86,8 +88,8 @@ class data_generator_snpe(data_generator):
                 + self.model_config["name"]
             )
 
-            if not os.path.exists(training_data_folder):
-                os.makedirs(training_data_folder)
+            if not Path(training_data_folder).exists():
+                Path(training_data_folder).mkdir(parents=True)
 
             full_file_name = (
                 training_data_folder
@@ -103,7 +105,7 @@ class data_generator_snpe(data_generator):
 
             pickle.dump(
                 data,
-                open(full_file_name, "wb"),
+                Path(full_file_name).open("wb"),
                 protocol=self.generator_config["pickleprotocol"],
             )
             return "Dataset completed"
