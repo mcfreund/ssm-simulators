@@ -1,11 +1,3 @@
-from ssms.config.config import model_config, boundary_config, drift_config
-import numpy as np
-import pandas as pd
-from copy import deepcopy
-import warnings
-from numpy.random import default_rng
-from threading import Lock
-
 """
 This module defines the basic simulator function which is the main
 workshorse of the package.
@@ -13,10 +5,18 @@ In addition some utility functions are provided that help
 with preprocessing the output of the simulator function.
 """
 
-from typing import Dict, Any
-from ssms.basic_simulators.theta_processor import SimpleThetaProcessor
+from copy import deepcopy
+from threading import Lock
+from typing import Any
 
-DEFAULT_SIM_PARAMS: Dict[str, Any] = {
+import numpy as np
+import pandas as pd
+from numpy.random import default_rng
+
+from ssms.basic_simulators.theta_processor import SimpleThetaProcessor
+from ssms.config.config import boundary_config, drift_config, model_config
+
+DEFAULT_SIM_PARAMS: dict[str, Any] = {
     "max_t": 20.0,
     "n_samples": 2000,
     "n_trials": 1000,
@@ -59,7 +59,7 @@ def _make_valid_dict(dict_in: dict) -> dict:
         # Turn all values into numpy arrays
         if isinstance(value, list):
             dict_in[key] = np.array(value).astype(np.float32)
-        elif isinstance(value, (int, float)):
+        elif isinstance(value, int | float):
             dict_in[key] = np.array([value]).astype(np.float32)
 
         # Squeeze all values to make sure they are 1d arrays
@@ -93,7 +93,8 @@ def _make_valid_dict(dict_in: dict) -> dict:
 
 
 def _theta_dict_to_array(
-    theta: dict = {}, model_param_list: list[str] | None = None
+    theta: dict = {},  # TODO: #80 use dict instead of dict | None  # noqa: B006, FIX002
+    model_param_list: list[str] | None = None,
 ) -> np.ndarray:
     """Converts theta dictionary to numpy array for use with simulator function.
 
@@ -431,7 +432,10 @@ def bin_arbitrary_fptd(
     bin_dt: float = 0.04,
     nbins: int = 256,
     nchoices: int = 2,
-    choice_codes: list[float] = [-1.0, 1.0],
+    choice_codes: list[float] = [  # noqa: B006
+        -1.0,
+        1.0,
+    ],  # TODO: #80 use tuple instead of list  # noqa: B006, FIX002
     max_t: float = 10.0,
 ) -> np.ndarray:  # ['v', 'a', 'w', 't', 'angle']
     """Takes in simulator output and returns a histogram of bin counts
@@ -742,7 +746,7 @@ def simulator(
     x["go_p"] = np.zeros((n_trials, 1))
 
     # Calculate choice probabilities by trial
-    # TODO: vectorize this
+    # TODO: #79 vectorize this  # noqa: FIX002
     for k in range(n_trials):
         out_len = x["rts"][:, k, :].shape[0]
         out_len_no_omission = x["rts"][:, k, :][x["rts"][:, k, :] != -999].shape[0]
