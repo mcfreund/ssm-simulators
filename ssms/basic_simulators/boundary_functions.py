@@ -1,10 +1,10 @@
 """Define a collection of boundary functions for the simulators in the package."""
 
 # External
-from typing import Callable
+from collections.abc import Callable
 
 import numpy as np
-from scipy.stats import gamma # type: ignore
+from scipy.stats import gamma  # type: ignore
 
 # Collection of boundary functions
 
