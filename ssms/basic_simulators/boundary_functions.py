@@ -9,8 +9,9 @@ from scipy.stats import gamma  # type: ignore
 # Collection of boundary functions
 
 
+# TODO: #82 Revise how the constant function is implemented. It is not clear what it's supposed to do.  # noqa: FIX002
 # Constant: (multiplicative)
-def constant(t: float | np.ndarray = 0) -> float | np.ndarray:
+def constant(t: float | np.ndarray = 0) -> float | np.ndarray:  # noqa: ARG001
     """Constant boundary function.
 
     Arguments
@@ -42,7 +43,10 @@ def angle(t: float | np.ndarray = 1, theta: float = 1) -> np.ndarray:
 
 # Generalized logistic bound (additive)
 def generalized_logistic(
-    t: float | np.ndarray = 1, B: float = 2.0, M: float = 3.0, v: float = 0.5
+    t: float | np.ndarray = 1,
+    B: float = 2.0,  # noqa: N803
+    M: float = 3.0,  # noqa: N803
+    v: float = 0.5,  # noqa: N803
 ) -> np.ndarray:
     """Generalized logistic bound.
 
@@ -81,7 +85,9 @@ def weibull_cdf(
 
 
 def conflict_gamma(
-    t: float | np.ndarray = np.arange(0, 20, 0.1),
+    t: float | np.ndarray = np.arange(  # noqa: B008
+        0, 20, 0.1
+    ),  # TODO: #81 B008 Do not perform function call `np.arange` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable  # noqa: B008, FIX002
     theta: float = 0.5,
     scale: float = 1,
     alpha_gamma: float = 1.01,
