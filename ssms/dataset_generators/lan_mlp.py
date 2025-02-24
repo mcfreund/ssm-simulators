@@ -586,23 +586,17 @@ class data_generator:
                     with Pool(processes=self.generator_config["n_cpus"] - 1) as pool:
                         out_list += pool.map(
                             self._cpn_get_processed_data_for_theta,
-                            [
-                                k
-                                for k in seed_args[
+                            list(seed_args[
                                     (i * subrun_n) : ((i + 1) * subrun_n)
-                                ]
-                            ],
+                                ]),
                         )
                 else:
                     with Pool(processes=self.generator_config["n_cpus"] - 1) as pool:
                         out_list += pool.map(
                             self._mlp_get_processed_data_for_theta,
-                            [
-                                k
-                                for k in seed_args[
+                            list(seed_args[
                                     (i * subrun_n) : ((i + 1) * subrun_n)
-                                ]
-                            ],
+                                ]),
                         )
             else:
                 print("No Multiprocessing, since only one cpu requested!")
