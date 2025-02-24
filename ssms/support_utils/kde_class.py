@@ -72,7 +72,8 @@ class LogKDE:
         self.simulator_info = simulator_data["metadata"]
 
         if displace_t:
-            assert np.unique(simulator_data["metadata"]["t"]).shape[0] == 1, (
+            # TODO: #84 Replace with exception  # noqa: FIX002
+            assert np.unique(simulator_data["metadata"]["t"]).shape[0] == 1, (  # noqa: S101
                 "Multiple t values in simulator data. Can't shift."
             )
             self.displace_t_val = np.unique(simulator_data["metadata"]["t"])[0]
@@ -87,7 +88,7 @@ class LogKDE:
 
     # Function to compute bandwidth parameters given data-set
     # (At this point using Silverman rule)
-    def compute_bandwidths(self, type="silverman"):
+    def compute_bandwidths(self, bandwidth_type="silverman"):
         """
         Computes bandwidths for each choice from rt data.
 
@@ -104,7 +105,7 @@ class LogKDE:
 
         # For now allows only silverman rule
         self.bandwidths = []
-        if type == "silverman":
+        if bandwidth_type == "silverman":
             for i in range(0, len(self.data["choices"]), 1):
                 if len(self.data["log_rts"][i]) == 0:
                     self.bandwidths.append("no_base_data")
@@ -191,7 +192,7 @@ class LogKDE:
             )
             assert data["log_rts"].shape == data["choices"].shape, (  # noqa: S101
                 "rts and choices need to have matching shapes in data dictionary!"
-            ) # TODO: #84 Replace with exception  # noqa: FIX002
+            )  # TODO: #84 Replace with exception  # noqa: FIX002
             return self._kde_eval_log_rt(
                 data=data_internal, log_eval=log_eval, lb=lb, eps=eps
             )
@@ -204,7 +205,7 @@ class LogKDE:
             )
             assert data_internal["rts"].shape == data_internal["choices"].shape, (  # noqa: S101
                 "rts and choices need to have matching shapes in data dictionary!"
-            ) # TODO: #84 Replace with exception  # noqa: FIX002
+            )  # TODO: #84 Replace with exception  # noqa: FIX002
             return self._kde_eval_(
                 data=data_internal, log_eval=log_eval, lb=lb, eps=eps
             )
@@ -217,7 +218,7 @@ class LogKDE:
             )
             assert data_internal["rts"].shape == data_internal["choices"].shape, (  # noqa: S101
                 "rts and choices need to have matching shapes in data dictionary!"
-            ) # TODO: #84 Replace with exception  # noqa: FIX002
+            )  # TODO: #84 Replace with exception  # noqa: FIX002
             return self._kde_eval_(
                 data=data_internal, log_eval=log_eval, lb=lb, eps=eps
             )
@@ -227,7 +228,9 @@ class LogKDE:
             )
 
     # TODO: #81 B008 Do not perform function call `np.arange` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable  # noqa: B006, FIX002
-    def _kde_eval_(self, data={}, log_eval=True, lb=-66.774, eps=10e-5):  # kde  # noqa: B006
+    def _kde_eval_(
+        self, data={}, log_eval=True, lb=-66.774, eps=10e-5  # noqa: B006
+    ):  # kde  # noqa: B006
         """
         Evaluates kde log likelihood at chosen points.
 
@@ -292,7 +295,9 @@ class LogKDE:
             return np.squeeze(np.exp(log_kde_eval))
 
     # Function to evaluate the kde log likelihood at chosen points
-    def _kde_eval_log_rt(self, data={}, log_eval=True, lb=-66.774, eps=10e-5):  # kde # TODO: #81 B008 Do not perform function call `np.arange` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable  # noqa: B006, FIX002
+    def _kde_eval_log_rt(
+        self, data={}, log_eval=True, lb=-66.774, eps=10e-5  # noqa: B006
+    ):  # kde # TODO: #81 B008 Do not perform function call `np.arange` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable  # noqa: B006, FIX002
         """
         Evaluates kde log likelihood at chosen points.
 
@@ -500,7 +505,11 @@ class LogKDE:
 
 # Support functions (accessible from outside the main class defined in script)
 def bandwidth_silverman(
-    sample=[0, 0, 0], # TODO: #81 B008 Do not perform function call `np.arange` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable  # noqa: B006, B008, FIX002
+    sample=[  # noqa: B006
+        0,
+        0,
+        0,
+    ],  # TODO: #81 B008 Do not perform function call `np.arange` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable  # noqa: B006, B008, FIX002
     std_cutoff=1e-3,
     std_proc="restrict",  # options 'kill', 'restrict'
     std_n_1=10,  # HERE WE CAN ALLOW FOR SOMETHING MORE INTELLIGENT
