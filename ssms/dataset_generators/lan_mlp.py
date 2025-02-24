@@ -4,12 +4,12 @@ The class defined below can be used to generate training data
 compatible with the expectations of LANs.
 """
 
-import os
 import pickle
 import uuid
 import warnings
 from copy import deepcopy
 from functools import partial
+from pathlib import Path
 
 import numpy as np
 import psutil
@@ -25,7 +25,8 @@ from ssms.support_utils import kde_class
 from ssms.support_utils.utils import sample_parameters_from_constraints
 
 
-class data_generator:
+# TODO: #77 rew Class name `data_generator` should use CapWords convention  # noqa: FIX002
+class data_generator:  # noqa: N801
     """The data_generator() class is used to generate training data
       for various likelihood approximators.
 
@@ -123,7 +124,8 @@ class data_generator:
                 and self.model_config["name"].split("_deadline")[0] in KDE_NO_DISPLACE_T
             ):
                 warnings.warn(
-                    f"kde_displace_t is True, but model is in {KDE_NO_DISPLACE_T}. Overriding setting to False"
+                    f"kde_displace_t is True, but model is in {KDE_NO_DISPLACE_T}. Overriding setting to False",
+                    stacklevel=2,
                 )
                 self.generator_config["kde_displace_t"] = False
 
@@ -166,8 +168,8 @@ class data_generator:
 
             print("checking: ", folder_partial)
 
-            if not os.path.exists(folder_partial):
-                os.makedirs(folder_partial)
+            if not Path(folder_partial).exists():
+                Path(folder_partial).mkdir(parents=True)
 
     def _get_ncpus(self):
         """Get the number cpus to use for parallelization."""
@@ -586,17 +588,13 @@ class data_generator:
                     with Pool(processes=self.generator_config["n_cpus"] - 1) as pool:
                         out_list += pool.map(
                             self._cpn_get_processed_data_for_theta,
-                            list(seed_args[
-                                    (i * subrun_n) : ((i + 1) * subrun_n)
-                                ]),
+                            list(seed_args[(i * subrun_n) : ((i + 1) * subrun_n)]),
                         )
                 else:
                     with Pool(processes=self.generator_config["n_cpus"] - 1) as pool:
                         out_list += pool.map(
                             self._mlp_get_processed_data_for_theta,
-                            list(seed_args[
-                                    (i * subrun_n) : ((i + 1) * subrun_n)
-                                ]),
+                            list(seed_args[(i * subrun_n) : ((i + 1) * subrun_n)]),
                         )
             else:
                 print("No Multiprocessing, since only one cpu requested!")
@@ -658,8 +656,8 @@ class data_generator:
         data["model_config"] = self.model_config
 
         if save:
-            if not os.path.exists(self.generator_config["output_folder"]):
-                os.makedirs(self.generator_config["output_folder"])
+            if not Path(self.generator_config["output_folder"]).exists():
+                Path(self.generator_config["output_folder"]).mkdir(parents=True)
 
             full_file_name = (
                 self.generator_config["output_folder"]
@@ -673,7 +671,7 @@ class data_generator:
 
             pickle.dump(
                 data,
-                open(full_file_name, "wb"),
+                Path(full_file_name).open("wb"),
                 protocol=self.generator_config["pickleprotocol"],
             )
             return "Dataset completed"
@@ -957,9 +955,9 @@ class data_generator:
             + "_n_"
             + str(self.generator_config["n_samples"])
         )
-
-        if not os.path.exists(training_data_folder):
-            os.makedirs(training_data_folder)
+        if not Path(training_data_folder).exists():
+            Path(training_data_folder).mkdir(parents=True, exist_ok=True)
+            Path(training_data_folder).mkdir(parents=True, exist_ok=True)
 
         full_file_name = (
             training_data_folder
@@ -1009,8 +1007,8 @@ class data_generator:
                 + str(self.generator_config["n_samples"])
             )
 
-            if not os.path.exists(training_data_folder):
-                os.makedirs(training_data_folder)
+            if not Path(training_data_folder).exists():
+                Path(training_data_folder).mkdir(parents=True)
 
             full_file_name = (
                 training_data_folder
@@ -1024,7 +1022,7 @@ class data_generator:
 
             pickle.dump(
                 np.float32(rejected_parameterization_list),
-                open(full_file_name, "wb"),
+                Path(full_file_name).open("wb"),
                 protocol=self.generator_config["pickleprotocol"],
             )
             print("Dataset completed")
