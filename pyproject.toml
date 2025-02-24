@@ -50,13 +50,12 @@ Homepage = "https://github.com/lnccbrown/ssm-simulators"
 [tool.setuptools]
 packages = ["ssms"]
 
-[tool.black]
-line-length = 88
-target-version = ['py310']
-
 [tool.ruff]
 line-length = 88
-target-python-version = "py310"
+exclude = ["notebooks", "docs"]
+
+[tool.ruff.lint]
+ignore = ["E501", "TD002", "TD003"]
 select = [
     "E",
     "F",
@@ -77,7 +76,6 @@ select = [
     "TD",
     "FIX",
 ]
-ignore = ["TD002", "TD003"]
 
 [tool.mypy]
 python_version = "3.10"
