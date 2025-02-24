@@ -14,6 +14,7 @@ from ssms.dataset_generators.lan_mlp import data_generator
 
 """
 
+
 # TODO: #78 Class name `data_generator_snpe` should use CapWords convention  # noqa: FIX002
 class data_generator_snpe(data_generator):  # noqa: N801
     """
