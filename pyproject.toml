@@ -52,9 +52,10 @@ packages = ["ssms"]
 
 [tool.ruff]
 line-length = 88
-exclude = ["notebooks", "docs"]
+exclude = ["notebooks", "docs", "tests"]
 
 [tool.ruff.lint]
+exclude = ["notebooks", "docs"]
 ignore = ["E501", "TD002", "TD003"]
 select = [
     "E",
