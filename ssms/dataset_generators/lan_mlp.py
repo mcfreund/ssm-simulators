@@ -18,10 +18,30 @@ from ssms.config import KDE_NO_DISPLACE_T
 
 
 """
-    This module defines a data generator class for use with LANs. 
-    The class defined below can be used to generate training data 
-    compatible with the expectations of LANs.
+This module defines a data generator class for use with LANs.
+The class defined below can be used to generate training data
+compatible with the expectations of LANs.
 """
+
+import os
+import pickle
+import uuid
+import warnings
+from copy import deepcopy
+from functools import partial
+
+import numpy as np
+import psutil
+from pathos.multiprocessing import ProcessingPool as Pool
+from scipy.stats import mode
+
+from ssms.basic_simulators.simulator import (
+    _theta_dict_to_array,
+    simulator,  # , bin_simulator_output
+)
+from ssms.config import KDE_NO_DISPLACE_T
+from ssms.support_utils import kde_class
+from ssms.support_utils.utils import sample_parameters_from_constraints
 
 
 class data_generator:
