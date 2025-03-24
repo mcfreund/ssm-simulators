@@ -43,6 +43,7 @@ dev = [
     "pytest-xdist>=3.6.1",
     "ipykernel>=6.29.5",
     "nbconvert>=7.16.6",
+    "nb-clean>=4.0.1",
 ]
 
 [project.urls]
