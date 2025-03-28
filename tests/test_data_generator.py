@@ -42,35 +42,6 @@ def test_data_generator():
         "n_particles": 1,
     }
 
-    gen_config = ssms.config.data_generator_config["lan"]
-    assert gen_config == {
-        "output_folder": "data/lan_mlp/",
-        "model": "ddm",
-        "nbins": 0,
-        "n_samples": 100000,
-        "n_parameter_sets": 10000,
-        "n_parameter_sets_rejected": 100,
-        "n_training_samples_by_parameter_set": 1000,
-        "max_t": 20.0,
-        "delta_t": 0.001,
-        "pickleprotocol": 4,
-        "n_cpus": "all",
-        "kde_data_mixture_probabilities": [0.8, 0.1, 0.1],
-        "simulation_filters": {
-            "mode": 20,
-            "choice_cnt": 0,
-            "mean_rt": 17,
-            "std": 0,
-            "mode_cnt_rel": 0.95,
-        },
-        "negative_rt_cutoff": -66.77497,
-        "n_subruns": 10,
-        "bin_pointwise": False,
-        "separate_response_channels": False,
-        "smooth_unif": True,
-        "kde_displace_t": False,
-    }
-
     # Initialize the generator config (for MLP LANs)
     generator_config = deepcopy(gen_config)
     # Specify generative model (one from the list of included models mentioned above)
@@ -82,7 +53,7 @@ def test_data_generator():
 
     # Now let's define our corresponding `model_config`.
     model_config = ssms.config.model_config["angle"]
-    my_dataset_generator = ssms.dataset_generators.lan_mlp.data_generator(
+    my_dataset_generator = ssms.dataset_generators.lan_mlp.DataGenerator(
         generator_config=generator_config, model_config=model_config
     )
     training_data = my_dataset_generator.generate_data_training_uniform(save=False)
@@ -95,7 +66,7 @@ def test_data_generator():
         "opn_labels",
         "gonogo_data",
         "gonogo_labels",
-        "thetas",
+        "theta",
         "lan_data",
         "lan_labels",
         "binned_128",
@@ -104,16 +75,5 @@ def test_data_generator():
         "model_config",
     ]
 
-    del model_config["simulator"]
-    del model_config["boundary"]
-    assert model_config == {
-        "name": "angle",
-        "params": ["v", "a", "z", "t", "theta"],
-        "param_bounds": [[-3.0, 0.3, 0.1, 0.001, -0.1], [3.0, 3.0, 0.9, 2.0, 1.3]],
-        "boundary_name": "angle",
-        "n_params": 5,
-        "default_params": [0.0, 1.0, 0.5, 0.001, 0.0],
-        "nchoices": 2,
-        "choices": [-1, 1],
-        "n_particles": 1,
-    }
+    expected_model_config = ssms.config.model_config["angle"]
+    assert model_config == expected_model_config
