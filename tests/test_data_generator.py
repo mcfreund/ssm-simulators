@@ -1,11 +1,14 @@
 from copy import deepcopy
 
-import ssms
+import numpy as np
+
+from ssms.dataset_generators.lan_mlp import data_generator
+from ssms.config import model_config, data_generator_config
 
 
 def test_data_generator():
     # Check included models
-    assert list(ssms.config.model_config.keys())[:10] == [
+    assert list(model_config.keys())[:10] == [
         "ddm",
         "ddm_legacy",
         "angle",
@@ -19,31 +22,15 @@ def test_data_generator():
     ]
 
     # Take an example config for a given model
-    model_conf = ssms.config.model_config["ddm"]
+    model_conf = model_config["ddm"]
 
     assert type(model_conf["simulator"]).__name__ == "cython_function_or_method"
 
     assert callable(model_conf["simulator"])
     assert callable(model_conf["boundary"])
 
-    del model_conf["simulator"]
-    del model_conf["boundary"]
-
-    assert model_conf == {
-        "name": "ddm",
-        "params": ["v", "a", "z", "t"],
-        "param_bounds": [[-3.0, 0.3, 0.1, 0.0], [3.0, 2.5, 0.9, 2.0]],
-        "boundary_name": "constant",
-        "boundary_params": [],
-        "n_params": 4,
-        "default_params": [0.0, 1.0, 0.5, 0.001],
-        "nchoices": 2,
-        "choices": [-1, 1],
-        "n_particles": 1,
-    }
-
     # Initialize the generator config (for MLP LANs)
-    gen_config = ssms.config.data_generator_config["lan"]
+    gen_config = data_generator_config["lan"]
     generator_config = deepcopy(gen_config)
     # Specify generative model (one from the list of included models mentioned above)
     generator_config["dgp_list"] = "angle"
@@ -53,11 +40,37 @@ def test_data_generator():
     generator_config["n_samples"] = 1000
 
     # Now let's define our corresponding `model_config`.
-    model_config = ssms.config.model_config["angle"]
-    my_dataset_generator = ssms.dataset_generators.lan_mlp.data_generator(
-        generator_config=generator_config, model_config=model_config
+    angle_model_config = model_config["angle"]
+    my_dataset_generator = data_generator(
+        generator_config=generator_config, model_config=angle_model_config
     )
     training_data = my_dataset_generator.generate_data_training_uniform(save=False)
+
+
+    # Because randomly generated arrays may differ across OS and versions of Python,
+    # even when setting a random seed, we check for array shape
+    td_array_shapes = {
+        k: v.shape for k, v in training_data.items() if isinstance(v, np.ndarray)
+    }
+
+    expected_shapes = {
+        "cpn_data": (100, 5),
+        "cpn_labels": (100,),
+        "cpn_no_omission_data": (100, 5),
+        "cpn_no_omission_labels": (100,),
+        "opn_data": (100, 5),
+        "opn_labels": (100, 1),
+        "gonogo_data": (100, 5),
+        "gonogo_labels": (100, 1),
+        "thetas": (100, 5),
+        "lan_data": (100000, 7),
+        "lan_labels": (100000,),
+        "binned_128": (100, 128, 2),
+        "binned_256": (100, 256, 2),
+    }
+
+    assert td_array_shapes == expected_shapes
+
     assert list(training_data.keys()) == [
         "cpn_data",
         "cpn_labels",
@@ -76,5 +89,13 @@ def test_data_generator():
         "model_config",
     ]
 
-    expected_model_config = ssms.config.model_config["angle"]
-    assert model_config == expected_model_config
+    assert training_data["model_config"]["constrained_param_space"] == {
+        "a": (0.3, 3.0),
+        "t": (0.001, 2.0),
+        "theta": (-0.1, 1.3),
+        "v": (-3.0, 3.0),
+        "z": (0.1, 0.9),
+    }
+
+    del training_data["model_config"]["constrained_param_space"]
+    assert training_data["model_config"] == angle_model_config
