@@ -1,12 +1,13 @@
 from copy import deepcopy
 
 import numpy as np
+import pytest
 
 from ssms.dataset_generators.lan_mlp import data_generator
 from ssms.config import model_config, data_generator_config
 
 
-def test_data_generator():
+def test_data_generator(tmp_path):
     # Check included models
     assert list(model_config.keys())[:10] == [
         "ddm",
@@ -39,12 +40,31 @@ def test_data_generator():
     # Specify how many samples a simulation run should entail
     generator_config["n_samples"] = 1000
 
+    # set ouput folder
+    generator_config["output_folder"] = str(tmp_path)
+
     # Now let's define our corresponding `model_config`.
     angle_model_config = model_config["angle"]
+
+    with pytest.raises(ValueError):
+        data_generator(
+        generator_config=generator_config, model_config=None
+    )
+    
+    with pytest.raises(ValueError):
+        data_generator(
+        generator_config=None, model_config=angle_model_config
+    )
+
+
     my_dataset_generator = data_generator(
         generator_config=generator_config, model_config=angle_model_config
     )
-    training_data = my_dataset_generator.generate_data_training_uniform(save=False)
+    training_data = my_dataset_generator.generate_data_training_uniform(save=True)
+    
+    new_data_file = list(tmp_path.iterdir())[0]
+    assert new_data_file.exists()
+    assert new_data_file.suffix == '.pickle'
 
 
     # Because randomly generated arrays may differ across OS and versions of Python,
