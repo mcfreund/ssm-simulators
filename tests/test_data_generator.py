@@ -43,6 +43,7 @@ def test_data_generator():
     }
 
     # Initialize the generator config (for MLP LANs)
+    gen_config = ssms.config.data_generator_config["lan"]
     generator_config = deepcopy(gen_config)
     # Specify generative model (one from the list of included models mentioned above)
     generator_config["dgp_list"] = "angle"
@@ -53,7 +54,7 @@ def test_data_generator():
 
     # Now let's define our corresponding `model_config`.
     model_config = ssms.config.model_config["angle"]
-    my_dataset_generator = ssms.dataset_generators.lan_mlp.DataGenerator(
+    my_dataset_generator = ssms.dataset_generators.lan_mlp.data_generator(
         generator_config=generator_config, model_config=model_config
     )
     training_data = my_dataset_generator.generate_data_training_uniform(save=False)
@@ -66,7 +67,7 @@ def test_data_generator():
         "opn_labels",
         "gonogo_data",
         "gonogo_labels",
-        "theta",
+        "thetas",
         "lan_data",
         "lan_labels",
         "binned_128",
