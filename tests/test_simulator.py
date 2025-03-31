@@ -13,20 +13,20 @@ def sim_input_data():
     data = dict()
 
     # Prepare input data for each model
-    for key in model_config.keys():
+    for key, config in model_config.items():
         # Get model parameter names
-        model_param_list = model_config[key]["params"]
+        model_param_list = config["params"]
 
         # Dictionary with all scalar values
         theta_dict_all_scalars = {
-            param: model_config[key]["default_params"][i]
+            param: config["default_params"][i]
             for i, param in enumerate(model_param_list)
         }
 
         # Dictionary with all vectors
         theta_dict_all_vectors = {
             param: np.tile(
-                np.array(model_config[key]["default_params"][i]),
+                np.array(config["default_params"][i]),
                 100,
             )
             for i, param in enumerate(model_param_list)
@@ -35,17 +35,17 @@ def sim_input_data():
         # Dictionary with mix of scalars and vectors
         theta_dict_sca_vec = deepcopy(theta_dict_all_vectors)
         cnt = 0
-        for tmp_key in theta_dict_all_scalars.keys():
+        for tmp_key in theta_dict_all_scalars:
             theta_dict_sca_vec[tmp_key] = theta_dict_all_scalars[tmp_key]
             if cnt > 0:
                 break
             cnt += 1
 
-        # Dictionary with vectros of uneven length
+        # Dictionary with vectors of uneven length
         theta_dict_uneven = deepcopy(theta_dict_all_vectors)
 
         cnt = 0
-        for tmp_key in theta_dict_all_scalars.keys():
+        for tmp_key in theta_dict_all_scalars:
             if cnt > 0:
                 break
             theta_dict_uneven[tmp_key] = np.concatenate(
@@ -55,7 +55,7 @@ def sim_input_data():
 
         # Input is list
         theta_list = [
-            model_config[key]["default_params"][i]
+            config["default_params"][i]
             for i, param in enumerate(model_param_list)
         ]
 
@@ -86,10 +86,10 @@ def sim_input_data():
 def test_simulator_runs(sim_input_data):
     """Test that simulator runs for all models"""
     # Go over model names
-    for key in model_config.keys():
+    for key in model_config:
         # Go over different types of input data
         # (listed above in sim_input_data() fixture)
-        for subkey in sim_input_data[key].keys():
+        for subkey in sim_input_data[key]:
             print(key, " -> ", subkey)
 
             # Go over different number of samples
