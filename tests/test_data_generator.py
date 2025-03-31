@@ -6,66 +6,53 @@ import pytest
 from ssms.dataset_generators.lan_mlp import data_generator
 from ssms.config import model_config, data_generator_config
 
+gen_config = data_generator_config["lan"]
+# Specify number of parameter sets to simulate
+gen_config["n_parameter_sets"] = 100
+# Specify how many samples a simulation run should entail
+gen_config["n_samples"] = 1000
 
-def test_data_generator(tmp_path):
-    # Check included models
-    assert list(model_config.keys())[:10] == [
-        "ddm",
-        "ddm_legacy",
-        "angle",
-        "weibull",
-        "levy",
-        "levy_angle",
-        "full_ddm",
-        "full_ddm_rv",
-        "ddm_st",
-        "ddm_truncnormt",
-    ]
 
+@pytest.mark.parametrize("model_name", model_config.keys())
+def test_model_config(model_name):
     # Take an example config for a given model
-    model_conf = model_config["ddm"]
+    model_conf = model_config[model_name]
 
     assert type(model_conf["simulator"]).__name__ == "cython_function_or_method"
 
     assert callable(model_conf["simulator"])
     assert callable(model_conf["boundary"])
 
+
+@pytest.mark.parametrize("model_name", model_config.keys())
+def test_data_generator(tmp_path, model_name):
     # Initialize the generator config (for MLP LANs)
-    gen_config = data_generator_config["lan"]
+
     generator_config = deepcopy(gen_config)
     # Specify generative model (one from the list of included models mentioned above)
-    generator_config["dgp_list"] = "angle"
-    # Specify number of parameter sets to simulate
-    generator_config["n_parameter_sets"] = 100
-    # Specify how many samples a simulation run should entail
-    generator_config["n_samples"] = 1000
 
-    # set ouput folder
+    generator_config["dgp_list"] = model_name
+
+    # set output folder
     generator_config["output_folder"] = str(tmp_path)
 
     # Now let's define our corresponding `model_config`.
     angle_model_config = model_config["angle"]
 
     with pytest.raises(ValueError):
-        data_generator(
-        generator_config=generator_config, model_config=None
-    )
-    
-    with pytest.raises(ValueError):
-        data_generator(
-        generator_config=None, model_config=angle_model_config
-    )
+        data_generator(generator_config=generator_config, model_config=None)
 
+    with pytest.raises(ValueError):
+        data_generator(generator_config=None, model_config=angle_model_config)
 
     my_dataset_generator = data_generator(
         generator_config=generator_config, model_config=angle_model_config
     )
     training_data = my_dataset_generator.generate_data_training_uniform(save=True)
-    
+
     new_data_file = list(tmp_path.iterdir())[0]
     assert new_data_file.exists()
-    assert new_data_file.suffix == '.pickle'
-
+    assert new_data_file.suffix == ".pickle"
 
     # Because randomly generated arrays may differ across OS and versions of Python,
     # even when setting a random seed, we check for array shape
