@@ -117,6 +117,6 @@ def test_simulator_runs(sim_input_data):
                         n_samples=n_samples,
                     )
                     assert isinstance(out, dict)
-                    assert "metadata" in out.keys()
-                    assert "rts" in out.keys()
-                    assert "choices" in out.keys()
+                    assert "metadata" in out
+                    assert "rts" in out
+                    assert "choices" in out
