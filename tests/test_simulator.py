@@ -1,10 +1,11 @@
-import pytest
+from copy import deepcopy
 
 import numpy as np
 import pandas as pd
+import pytest
+
 from ssms.basic_simulators.simulator import simulator
 from ssms.config import model_config
-from copy import deepcopy
 
 
 @pytest.fixture(scope="module")
