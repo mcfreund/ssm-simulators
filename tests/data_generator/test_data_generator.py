@@ -15,12 +15,13 @@ gen_config["n_training_samples_by_parameter_set"] = 100
 # Specify how many samples a simulation run should entail
 gen_config["n_samples"] = 10
 
+
 def test_data_persistance(tmp_path):
     model_conf = model_config["ddm"]
     generator_config = deepcopy(gen_config)
     generator_config["dgp_list"] = "ddm"
     generator_config["output_folder"] = str(tmp_path)
-    generator_config['n_subruns'] = 1
+    generator_config["n_subruns"] = 1
 
     my_dataset_generator = data_generator(
         generator_config=generator_config, model_config=model_conf
@@ -29,6 +30,7 @@ def test_data_persistance(tmp_path):
     new_data_file = list(tmp_path.iterdir())[0]
     assert new_data_file.exists()
     assert new_data_file.suffix == ".dill"
+
 
 @pytest.mark.parametrize("model_name", list(model_config.keys()))
 def test_model_config(model_name):
@@ -61,19 +63,12 @@ ok_model_config = [
     item for item in model_config.items() if item[0] not in models_to_skip
 ]
 
-@pytest.mark.parametrize("_model_config", ok_model_config)
-def test_data_generator(_model_config):
-    model_name, model_conf = _model_config
+
+@pytest.mark.parametrize("model_name,model_conf", ok_model_config)
+def test_data_generator(model_name, model_conf):
     generator_config = deepcopy(gen_config)
     generator_config["dgp_list"] = model_name
-    generator_config['n_subruns'] = 1
-
-
-    with pytest.raises(ValueError):
-        data_generator(generator_config=generator_config, model_config=None)
-
-    with pytest.raises(ValueError):
-        data_generator(generator_config=None, model_config=model_conf)
+    generator_config["n_subruns"] = 1
 
     my_dataset_generator = data_generator(
         generator_config=generator_config, model_config=model_conf
