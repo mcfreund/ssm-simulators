@@ -45,6 +45,7 @@ dev = [
     "ipykernel>=6.29.5",
     "nbconvert>=7.16.6",
     "nb-clean>=4.0.1",
+    "pytest-timer>=1.0.0",
 ]
 
 [project.urls]
