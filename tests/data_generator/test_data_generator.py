@@ -51,6 +51,7 @@ def test_data_persistance(tmp_path):
     generator_config = deepcopy(gen_config)
     generator_config["dgp_list"] = "ddm"
     generator_config["output_folder"] = str(tmp_path)
+    generator_config['n_subruns'] = 1
 
     my_dataset_generator = data_generator(
         generator_config=generator_config, model_config=model_conf
@@ -62,11 +63,12 @@ def test_data_persistance(tmp_path):
 
 
 @pytest.mark.parametrize("_model_config", ok_model_config)
-def test_data_generator(tmp_path, _model_config):
+def test_data_generator(_model_config):
     model_name, model_conf = _model_config
     generator_config = deepcopy(gen_config)
     generator_config["dgp_list"] = model_name
-    generator_config["output_folder"] = str(tmp_path)
+    generator_config['n_subruns'] = 2
+
 
     with pytest.raises(ValueError):
         data_generator(generator_config=generator_config, model_config=None)
@@ -80,7 +82,7 @@ def test_data_generator(tmp_path, _model_config):
     training_data = my_dataset_generator.generate_data_training_uniform(save=False)
 
     # Because randomly generated arrays may differ across OS and versions of Python,
-    # even when setting a random seed, we check for array shape
+    # even when setting a random seed, we check for array shape only
     td_array_shapes = {
         k: v.shape for k, v in training_data.items() if isinstance(v, np.ndarray)
     }
