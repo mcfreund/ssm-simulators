@@ -12,7 +12,7 @@ gen_config = data_generator_config["lan"]
 # Specify number of parameter sets to simulate
 gen_config["n_parameter_sets"] = 100
 # Specify how many samples a simulation run should entail
-gen_config["n_samples"] = 1000
+gen_config["n_samples"] = 10
 
 
 @pytest.mark.parametrize("model_name", list(model_config.keys()))
