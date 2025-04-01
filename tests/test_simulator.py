@@ -55,8 +55,7 @@ def sim_input_data():
 
         # Input is list
         theta_list = [
-            config["default_params"][i]
-            for i, param in enumerate(model_param_list)
+            config["default_params"][i] for i, param in enumerate(model_param_list)
         ]
 
         # Input is numpy array
