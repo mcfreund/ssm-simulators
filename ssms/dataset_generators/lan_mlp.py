@@ -12,6 +12,7 @@ from copy import deepcopy
 from functools import partial
 from pathlib import Path
 
+import dill
 import numpy as np
 import psutil
 from pathos.multiprocessing import ProcessingPool as Pool
@@ -36,7 +37,7 @@ class data_generator:  # noqa: N801
     Attributes
     ----------
         generator_config: dict
-            Configuation dictionary for the data generator.
+            Configuration dictionary for the data generator.
             (For an example load ssms.config.data_generator_config['lan'])
         model_config: dict
             Configuration dictionary for the model to be simulated.
@@ -127,7 +128,8 @@ class data_generator:  # noqa: N801
                 and self.model_config["name"].split("_deadline")[0] in KDE_NO_DISPLACE_T
             ):
                 warnings.warn(
-                    f"kde_displace_t is True, but model is in {KDE_NO_DISPLACE_T}. Overriding setting to False",
+                    f"kde_displace_t is True, but model is in {KDE_NO_DISPLACE_T}."
+                    " Overriding setting to False",
                     stacklevel=2,
                 )
                 self.generator_config["kde_displace_t"] = False
@@ -667,12 +669,12 @@ class data_generator:  # noqa: N801
                 + "/"
                 + "training_data_"
                 + uuid.uuid1().hex
-                + ".pickle"
+                + ".dill"
             )  # self.model_config['name'] + '_' + \
 
             print("Writing to file: ", full_file_name)
 
-            pickle.dump(
+            dill.dump(
                 data,
                 Path(full_file_name).open("wb"),
                 protocol=self.generator_config["pickleprotocol"],
