@@ -170,8 +170,6 @@ class data_generator:  # noqa: N801
             else:
                 folder_partial += folder_str_part
 
-            print("checking: ", folder_partial)
-
             if not Path(folder_partial).exists():
                 Path(folder_partial).mkdir(parents=True)
 
@@ -180,7 +178,6 @@ class data_generator:  # noqa: N801
         # Get number of cpus
         if self.generator_config["n_cpus"] == "all":
             n_cpus = psutil.cpu_count(logical=False)
-            print("n_cpus used: ", n_cpus)
         else:
             n_cpus = self.generator_config["n_cpus"]
 
