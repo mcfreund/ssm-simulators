@@ -26,17 +26,6 @@ def test_model_config(model_name):
     assert callable(model_conf["boundary"])
 
 
-# TODO: # Remove this once # is fixed
-models_to_skip = [
-    "lba_3_vs_constraint",
-    "lba_angle_3_vs_constraint",
-    "dev_rlwm_lba_race_v2",
-]
-ok_model_config = [
-    item for item in model_config.items() if item[0] not in models_to_skip
-]
-
-
 def test_bad_inputs():
     model_conf = model_config["ddm"]
 
@@ -46,6 +35,16 @@ def test_bad_inputs():
     with pytest.raises(ValueError):
         data_generator(generator_config=None, model_config=model_conf)
 
+
+# TODO: # Remove this once # is fixed
+models_to_skip = [
+    "lba_3_vs_constraint",
+    "lba_angle_3_vs_constraint",
+    "dev_rlwm_lba_race_v2",
+]
+ok_model_config = [
+    item for item in model_config.items() if item[0] not in models_to_skip
+]
 
 def test_data_persistance(tmp_path):
     model_conf = model_config["ddm"]
