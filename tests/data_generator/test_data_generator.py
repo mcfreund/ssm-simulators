@@ -11,9 +11,24 @@ from ssms.dataset_generators.lan_mlp import data_generator
 gen_config = data_generator_config["lan"]
 # Specify number of parameter sets to simulate
 gen_config["n_parameter_sets"] = 100
+gen_config["n_training_samples_by_parameter_set"] = 100
 # Specify how many samples a simulation run should entail
 gen_config["n_samples"] = 10
 
+def test_data_persistance(tmp_path):
+    model_conf = model_config["ddm"]
+    generator_config = deepcopy(gen_config)
+    generator_config["dgp_list"] = "ddm"
+    generator_config["output_folder"] = str(tmp_path)
+    generator_config['n_subruns'] = 1
+
+    my_dataset_generator = data_generator(
+        generator_config=generator_config, model_config=model_conf
+    )
+    training_data = my_dataset_generator.generate_data_training_uniform(save=True)
+    new_data_file = list(tmp_path.iterdir())[0]
+    assert new_data_file.exists()
+    assert new_data_file.suffix == ".dill"
 
 @pytest.mark.parametrize("model_name", list(model_config.keys()))
 def test_model_config(model_name):
@@ -45,22 +60,6 @@ models_to_skip = [
 ok_model_config = [
     item for item in model_config.items() if item[0] not in models_to_skip
 ]
-
-def test_data_persistance(tmp_path):
-    model_conf = model_config["ddm"]
-    generator_config = deepcopy(gen_config)
-    generator_config["dgp_list"] = "ddm"
-    generator_config["output_folder"] = str(tmp_path)
-    generator_config['n_subruns'] = 1
-
-    my_dataset_generator = data_generator(
-        generator_config=generator_config, model_config=model_conf
-    )
-    training_data = my_dataset_generator.generate_data_training_uniform(save=True)
-    new_data_file = list(tmp_path.iterdir())[0]
-    assert new_data_file.exists()
-    assert new_data_file.suffix == ".dill"
-
 
 @pytest.mark.parametrize("_model_config", ok_model_config)
 def test_data_generator(_model_config):
