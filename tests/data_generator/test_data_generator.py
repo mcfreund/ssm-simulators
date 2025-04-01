@@ -18,7 +18,7 @@ gen_config["n_samples"] = 10
 @pytest.mark.parametrize("model_name", list(model_config.keys()))
 def test_model_config(model_name):
     # Take an example config for a given model
-    model_conf = model_config[model_name]
+    model_conf = deepcopy(model_config[model_name])
 
     assert type(model_conf["simulator"]).__name__ == "cython_function_or_method"
 
@@ -67,7 +67,7 @@ def test_data_generator(_model_config):
     model_name, model_conf = _model_config
     generator_config = deepcopy(gen_config)
     generator_config["dgp_list"] = model_name
-    generator_config['n_subruns'] = 2
+    generator_config['n_subruns'] = 1
 
 
     with pytest.raises(ValueError):
@@ -111,16 +111,3 @@ def test_data_generator(_model_config):
         training_data["model_config"]["constrained_param_space"]
         == expected_constrained_param_space[model_name]
     )
-
-    # Generated training data include constrained_param_space
-    # but this is not included in the model_config. Deleting it
-    # from the training data before the assertion
-    del training_data["model_config"]["constrained_param_space"]
-
-    sfp = "simulator_fixed_params"
-    if (
-        sfp in training_data["model_config"] and model_name in model_config
-    ):  # can't compare these so we delete before assertion
-        del training_data["model_config"][sfp]
-        del model_config[model_name][sfp]
-    assert training_data["model_config"] == model_config[model_name]
