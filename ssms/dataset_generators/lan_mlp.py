@@ -5,7 +5,6 @@ compatible with the expectations of LANs.
 """
 
 import logging
-import pickle
 import uuid
 import warnings
 from copy import deepcopy
@@ -582,10 +581,9 @@ class data_generator:  # noqa: N801
         out_list = []
         for i in range(self.generator_config["n_subruns"]):
             if verbose:
-                print(
-                    "simulation round:",
+                logger.info(
+                    "simulation round: %d of %d",
                     i + 1,
-                    " of",
                     self.generator_config["n_subruns"],
                 )
             if self.generator_config["n_cpus"] > 1:
@@ -602,7 +600,7 @@ class data_generator:  # noqa: N801
                             list(seed_args[(i * subrun_n) : ((i + 1) * subrun_n)]),
                         )
             else:
-                print("No Multiprocessing, since only one cpu requested!")
+                logger.info("No Multiprocessing, since only one cpu requested!")
                 if cpn_only:
                     for k in seed_args[(i * subrun_n) : ((i + 1) * subrun_n)]:
                         out_list.append(self._cpn_get_processed_data_for_theta(k))
@@ -883,9 +881,9 @@ class data_generator:  # noqa: N801
             keep, stats = self._filter_simulations(simulations)
 
             if keep == 0 and rej_cnt < cnt_max:
-                print("simulation rejected")
-                print("stats: ", stats)
-                print("theta", theta)
+                logger.info("simulation rejected")
+                logger.info("stats: %s", stats)
+                logger.info("theta: %s", theta)
                 rejected_thetas.append(theta)
                 stats_rej.append(stats)
                 rej_cnt += 1
@@ -970,7 +968,7 @@ class data_generator:  # noqa: N801
             + self.model_config["name"]
             + "_"
             + uuid.uuid1().hex
-            + ".pickle"
+            + ".dill"
         )
         return full_file_name
 
@@ -1019,12 +1017,12 @@ class data_generator:  # noqa: N801
                 + "/"
                 + "rejected_parameterizations_"
                 + self.generator_config["file_id"]
-                + ".pickle"
+                + ".dill"
             )
 
             print("Writing to file: ", full_file_name)
 
-            pickle.dump(
+            dill.dump(
                 np.float32(rejected_parameterization_list),
                 Path(full_file_name).open("wb"),
                 protocol=self.generator_config["pickleprotocol"],
