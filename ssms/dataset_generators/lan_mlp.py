@@ -4,13 +4,14 @@ The class defined below can be used to generate training data
 compatible with the expectations of LANs.
 """
 
-import pickle
+import logging
 import uuid
 import warnings
 from copy import deepcopy
 from functools import partial
 from pathlib import Path
 
+import dill
 import numpy as np
 import psutil
 from pathos.multiprocessing import ProcessingPool as Pool
@@ -24,6 +25,8 @@ from ssms.config import KDE_NO_DISPLACE_T
 from ssms.support_utils import kde_class
 from ssms.support_utils.utils import sample_parameters_from_constraints
 
+logger = logging.getLogger(__name__)
+
 
 # TODO: #77 rew Class name `data_generator` should use CapWords convention  # noqa: FIX002
 class data_generator:  # noqa: N801
@@ -33,7 +36,7 @@ class data_generator:  # noqa: N801
     Attributes
     ----------
         generator_config: dict
-            Configuation dictionary for the data generator.
+            Configuration dictionary for the data generator.
             (For an example load ssms.config.data_generator_config['lan'])
         model_config: dict
             Configuration dictionary for the model to be simulated.
@@ -120,11 +123,12 @@ class data_generator:  # noqa: N801
                 self.generator_config["kde_displace_t"] = False
 
             if (
-                self.generator_config["kde_displace_t"] is True
+                self.generator_config["kde_displace_t"]
                 and self.model_config["name"].split("_deadline")[0] in KDE_NO_DISPLACE_T
             ):
                 warnings.warn(
-                    f"kde_displace_t is True, but model is in {KDE_NO_DISPLACE_T}. Overriding setting to False",
+                    f"kde_displace_t is True, but model is in {KDE_NO_DISPLACE_T}."
+                    " Overriding setting to False",
                     stacklevel=2,
                 )
                 self.generator_config["kde_displace_t"] = False
@@ -166,8 +170,6 @@ class data_generator:  # noqa: N801
             else:
                 folder_partial += folder_str_part
 
-            print("checking: ", folder_partial)
-
             if not Path(folder_partial).exists():
                 Path(folder_partial).mkdir(parents=True)
 
@@ -176,7 +178,6 @@ class data_generator:  # noqa: N801
         # Get number of cpus
         if self.generator_config["n_cpus"] == "all":
             n_cpus = psutil.cpu_count(logical=False)
-            print("n_cpus used: ", n_cpus)
         else:
             n_cpus = self.generator_config["n_cpus"]
 
@@ -577,10 +578,9 @@ class data_generator:  # noqa: N801
         out_list = []
         for i in range(self.generator_config["n_subruns"]):
             if verbose:
-                print(
-                    "simulation round:",
+                logger.info(
+                    "simulation round: %d of %d",
                     i + 1,
-                    " of",
                     self.generator_config["n_subruns"],
                 )
             if self.generator_config["n_cpus"] > 1:
@@ -597,7 +597,7 @@ class data_generator:  # noqa: N801
                             list(seed_args[(i * subrun_n) : ((i + 1) * subrun_n)]),
                         )
             else:
-                print("No Multiprocessing, since only one cpu requested!")
+                logger.info("No Multiprocessing, since only one cpu requested!")
                 if cpn_only:
                     for k in seed_args[(i * subrun_n) : ((i + 1) * subrun_n)]:
                         out_list.append(self._cpn_get_processed_data_for_theta(k))
@@ -664,20 +664,19 @@ class data_generator:  # noqa: N801
                 + "/"
                 + "training_data_"
                 + uuid.uuid1().hex
-                + ".pickle"
+                + ".dill"
             )  # self.model_config['name'] + '_' + \
 
             print("Writing to file: ", full_file_name)
 
-            pickle.dump(
+            dill.dump(
                 data,
                 Path(full_file_name).open("wb"),
                 protocol=self.generator_config["pickleprotocol"],
             )
-            return "Dataset completed"
+            logger.info("Dataset completed")
 
-        else:
-            return data
+        return data
 
     # def _nested_get_processed_data(self, random_seed):
     #     np.random.seed(random_seed)
@@ -879,9 +878,9 @@ class data_generator:  # noqa: N801
             keep, stats = self._filter_simulations(simulations)
 
             if keep == 0 and rej_cnt < cnt_max:
-                print("simulation rejected")
-                print("stats: ", stats)
-                print("theta", theta)
+                logger.info("simulation rejected")
+                logger.info("stats: %s", stats)
+                logger.info("theta: %s", theta)
                 rejected_thetas.append(theta)
                 stats_rej.append(stats)
                 rej_cnt += 1
@@ -966,7 +965,7 @@ class data_generator:  # noqa: N801
             + self.model_config["name"]
             + "_"
             + uuid.uuid1().hex
-            + ".pickle"
+            + ".dill"
         )
         return full_file_name
 
@@ -1015,12 +1014,12 @@ class data_generator:  # noqa: N801
                 + "/"
                 + "rejected_parameterizations_"
                 + self.generator_config["file_id"]
-                + ".pickle"
+                + ".dill"
             )
 
             print("Writing to file: ", full_file_name)
 
-            pickle.dump(
+            dill.dump(
                 np.float32(rejected_parameterization_list),
                 Path(full_file_name).open("wb"),
                 protocol=self.generator_config["pickleprotocol"],
