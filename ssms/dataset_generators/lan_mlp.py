@@ -532,9 +532,9 @@ class data_generator:  # noqa: N801
             keep, stats = self._filter_simulations(simulations)
 
             if keep == 0:
-                print("simulation rejected")
-                print("stats: ", stats)
-                print("theta", theta_dict)
+                logger.debug("simulation rejected")
+                logger.debug("stats: %s", stats)
+                logger.debug("theta: %s", theta_dict)
                 rejected_thetas.append(theta_dict)
             rej_cnt += 1
 
@@ -578,7 +578,7 @@ class data_generator:  # noqa: N801
         out_list = []
         for i in range(self.generator_config["n_subruns"]):
             if verbose:
-                logger.info(
+                logger.debug(
                     "simulation round: %d of %d",
                     i + 1,
                     self.generator_config["n_subruns"],
@@ -667,7 +667,7 @@ class data_generator:  # noqa: N801
                 + ".dill"
             )  # self.model_config['name'] + '_' + \
 
-            print("Writing to file: ", full_file_name)
+            logger.info("Writing to file: %s", full_file_name)
 
             dill.dump(
                 data,
@@ -878,9 +878,9 @@ class data_generator:  # noqa: N801
             keep, stats = self._filter_simulations(simulations)
 
             if keep == 0 and rej_cnt < cnt_max:
-                logger.info("simulation rejected")
-                logger.info("stats: %s", stats)
-                logger.info("theta: %s", theta)
+                logger.debug("simulation rejected")
+                logger.debug("stats: %s", stats)
+                logger.debug("theta: %s", theta)
                 rejected_thetas.append(theta)
                 stats_rej.append(stats)
                 rej_cnt += 1
@@ -1017,15 +1017,15 @@ class data_generator:  # noqa: N801
                 + ".dill"
             )
 
-            print("Writing to file: ", full_file_name)
+            logger.debug("Writing to file: %s", full_file_name)
 
             dill.dump(
                 np.float32(rejected_parameterization_list),
                 Path(full_file_name).open("wb"),
                 protocol=self.generator_config["pickleprotocol"],
             )
-            print("Dataset completed")
+            logger.debug("Dataset completed")
             return rejected_parameterization_list
         else:
-            print("Dataset completed")
+            logger.debug("Dataset completed")
             return rejected_parameterization_list
