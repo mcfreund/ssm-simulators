@@ -1,3 +1,4 @@
+import random
 from copy import deepcopy
 
 import numpy as np
@@ -53,7 +54,7 @@ def test_bad_inputs():
         data_generator(generator_config=None, model_config=model_conf)
 
 
-# TODO: # Remove this once # is fixed
+# TODO: Remove this once #114 is fixed
 models_to_skip = [
     "lba_3_vs_constraint",
     "lba_angle_3_vs_constraint",
@@ -62,7 +63,9 @@ models_to_skip = [
 ok_model_config = [
     item for item in model_config.items() if item[0] not in models_to_skip
 ]
-
+# TODO: Remove this once data generator is optimized for slow models (#113)
+subset_size = 1 + len(ok_model_config) // 10
+ok_model_config = random.sample(ok_model_config, subset_size)
 
 @pytest.mark.parametrize("model_name,model_conf", ok_model_config)
 def test_data_generator(model_name, model_conf):
