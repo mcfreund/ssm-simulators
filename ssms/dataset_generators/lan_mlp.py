@@ -1017,7 +1017,7 @@ class data_generator:  # noqa: N801
                 + ".dill"
             )
 
-            logger.debug("Writing to file: %s", full_file_name)
+            logger.info("Writing to file: %s", full_file_name)
 
             dill.dump(
                 np.float32(rejected_parameterization_list),
