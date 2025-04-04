@@ -682,4 +682,3 @@ class data_generator:  # noqa: N801
                 acc_cnt += 1
 
         return rejected_thetas, accepted_thetas
-
