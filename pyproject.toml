@@ -144,3 +144,9 @@ ignore = [
 python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
+
+[tool.coverage.run]
+omit = [
+    "*/setup.py",
+    "*/__init__.py"
+]

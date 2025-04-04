@@ -106,9 +106,9 @@ def test_simulator_runs(sim_input_data):
                             n_samples=n_samples,
                         )
                     except ValueError:
-                        raised_val_error = 1
+                        raised_value_error = 1
 
-                    assert raised_val_error
+                    assert raised_value_error
             else:
                 for n_samples in [1, 10]:
                     logger.debug("input data: %s", sim_input_data[key][subkey])

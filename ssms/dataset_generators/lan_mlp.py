@@ -680,6 +680,6 @@ class data_generator:  # noqa: N801
                 accepted_thetas.append(theta)
                 stats_acc.append(stats)
                 acc_cnt += 1
-            else:
-                pass
+
         return rejected_thetas, accepted_thetas
+
