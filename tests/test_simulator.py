@@ -1,4 +1,5 @@
 from copy import deepcopy
+import logging
 
 import numpy as np
 import pandas as pd
@@ -6,6 +7,8 @@ import pytest
 
 from ssms.basic_simulators.simulator import simulator
 from ssms.config import model_config
+
+logger = logging.getLogger(__name__)
 
 
 @pytest.fixture(scope="module")
@@ -89,7 +92,7 @@ def test_simulator_runs(sim_input_data):
         # Go over different types of input data
         # (listed above in sim_input_data() fixture)
         for subkey in sim_input_data[key]:
-            print(key, " -> ", subkey)
+            logger.debug(f"{key} -> {subkey}")
 
             # Go over different number of samples
             if subkey == "theta_dict_uneven":
@@ -108,8 +111,8 @@ def test_simulator_runs(sim_input_data):
                     assert raised_value_error
             else:
                 for n_samples in [1, 10]:
-                    print("input data: ", sim_input_data[key][subkey])
-                    print("n_samples: ", n_samples)
+                    logger.debug("input data: %s", sim_input_data[key][subkey])
+                    logger.debug("n_samples: %s", n_samples)
                     out = simulator(
                         model=key,
                         theta=sim_input_data[key][subkey],

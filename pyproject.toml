@@ -55,6 +55,18 @@ Homepage = "https://github.com/lnccbrown/ssm-simulators"
 [tool.setuptools]
 packages = ["ssms"]
 
+[tool.pytest.ini_options]
+log_cli = true
+log_cli_level = "INFO" # set minimum log level for console output
+testpaths = ["tests"]
+addopts = [
+    "--cov=.",
+    "--cov-report=term-missing",
+    "--cov-report=xml",
+    "--exitfirst",
+    "--timer-top-n=25",
+]
+
 [tool.ruff]
 line-length = 88
 exclude = ["notebooks", "docs", "tests"]

@@ -546,7 +546,7 @@ class data_generator:  # noqa: N801
         out_list = []
         for i in range(self.generator_config["n_subruns"]):
             if verbose:
-                logger.info(
+                logger.debug(
                     "simulation round: %d of %d",
                     i + 1,
                     self.generator_config["n_subruns"],
@@ -670,9 +670,9 @@ class data_generator:  # noqa: N801
             keep, stats = self._filter_simulations(simulations)
 
             if keep == 0 and rej_cnt < cnt_max:
-                logger.info("simulation rejected")
-                logger.info("stats: %s", stats)
-                logger.info("theta: %s", theta)
+                logger.debug("simulation rejected")
+                logger.debug("stats: %s", stats)
+                logger.debug("theta: %s", theta)
                 rejected_thetas.append(theta)
                 stats_rej.append(stats)
                 rej_cnt += 1
@@ -680,6 +680,5 @@ class data_generator:  # noqa: N801
                 accepted_thetas.append(theta)
                 stats_acc.append(stats)
                 acc_cnt += 1
-            else:
-                pass
+
         return rejected_thetas, accepted_thetas
