@@ -61,7 +61,8 @@ def make_data_generator_configs(
     save_folder="",
 ):
     # Load copy of the respective model's config dict from ssms
-    model_config = deepcopy(ssms.config.model_config[model.split("_deadline")[0]])
+    _no_deadline_model = model.split("_deadline")[0]
+    model_config = deepcopy(_model_config[_no_deadline_model])
 
     # Load copy of the respective data_generator_config dicts
     data_config = deepcopy(ssms.config.data_generator_config[generator_approach])
