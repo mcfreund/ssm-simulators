@@ -85,7 +85,7 @@ def make_data_generator_configs(
 
         # Dump pickle file
         with open(save_folder + save_name, "wb") as f:
-            pickle.dump(config_dict, f) 
+            pickle.dump(config_dict, f)
 
         print("Saved to: ")
         print(save_folder + save_name)
