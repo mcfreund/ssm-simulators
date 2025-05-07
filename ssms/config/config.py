@@ -380,7 +380,7 @@ model_config["ddm_mic2_leak_conflict_gamma_no_bias_no_lowdim_noise"] = model_con
 
 # TODO: remove this when the config is updated
 # For compatibility with script from lan pipeline
-data_generator_config = data_generator_config = {
+data_generator_config = {
     "opn_only": get_opn_only_config(),
     "cpn_only": get_cpn_only_config(),
     "lan": get_lan_config(),
