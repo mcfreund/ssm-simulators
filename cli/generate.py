@@ -85,42 +85,49 @@ def make_data_generator_configs(
     }
 
 
-def get_data_generator_config(yaml_config_path=None, base_path=None):
+def _get_data_generator_config(yaml_config_path=None, base_path=None, _model_config={}):
     with open(yaml_config_path, "rb") as f:
         basic_config = yaml.safe_load(f)
+
+    approach = basic_config["GENERATOR_APPROACH"]
+    n_samples = basic_config["N_SAMPLES"]
+    delta_t = basic_config["DELTA_T"]
+    model = basic_config["MODEL"]
+    n_parameter_sets = basic_config["N_PARAMETER_SETS"]
+    n_training_samples_by_parameter_set = basic_config[
+        "N_TRAINING_SAMPLES_BY_PARAMETER_SET"
+    ]
 
     training_data_folder = (
         base_path
         + "data/training_data/"
-        + basic_config["GENERATOR_APPROACH"]
+        + approach
         + "/training_data_n_samples_"
-        + str(basic_config["N_SAMPLES"])
+        + str(n_samples)
         + "_dt_"
-        + str(basic_config["DELTA_T"])
+        + str(delta_t)
         + "/"
-        + str(basic_config["MODEL"])
+        + str(model)
     )
 
     data_generator_arg_dict = {
         "output_folder": training_data_folder,
-        "model": basic_config["MODEL"],
-        "n_samples": basic_config["N_SAMPLES"],
-        "n_parameter_sets": basic_config["N_PARAMETER_SETS"],
-        "delta_t": basic_config["DELTA_T"],
-        "n_training_samples_by_parameter_set": basic_config[
-            "N_TRAINING_SAMPLES_BY_PARAMETER_SET"
-        ],
+        "model": model,
+        "n_samples": n_samples,
+        "n_parameter_sets": n_parameter_sets,
+        "delta_t": delta_t,
+        "n_training_samples_by_parameter_set": n_training_samples_by_parameter_set,
         "n_subruns": basic_config["N_SUBRUNS"],
-        "cpn_only": True if (basic_config["GENERATOR_APPROACH"] == "cpn") else False,
+        "cpn_only": True if (approach == "cpn") else False,
     }
 
     model_config_arg_dict = {}
 
     config_dict = make_data_generator_configs(
-        model=basic_config["MODEL"],
-        generator_approach=basic_config["GENERATOR_APPROACH"],
+        model=model,
+        generator_approach=approach,
         data_generator_arg_dict=data_generator_arg_dict,
-        model_config_arg_dict=model_config_arg_dict,
+        model_config_arg_dict=_model_config,
         save_name=None,
         save_folder=None,
     )
