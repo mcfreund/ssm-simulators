@@ -64,8 +64,8 @@ def make_data_generator_configs(
     _no_deadline_model = model.split("_deadline")[0]
     model_config = deepcopy(_model_config[_no_deadline_model])
 
-    # Load copy of the respective data_generator_config dicts
-    data_config = deepcopy(ssms.config.data_generator_config[generator_approach])
+    # Load data_generator_config dicts
+    data_config = get_data_generator_config(generator_approach)
     data_config["model"] = model
     data_config.update(data_generator_arg_dict)
     model_config.update(model_config_arg_dict)
