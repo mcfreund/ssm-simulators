@@ -72,23 +72,13 @@ def make_data_generator_configs(
 
     config_dict = {"model_config": model_config, "data_config": data_config}
 
-    if save_name is not None:
-        if len(save_folder) > 0:
-            if save_folder[-1] == "/":
-                pass
-            else:
-                save_folder = save_folder + "/"
-
-        # Create save_folder if not already there
-        try_gen_folder(folder=save_folder, allow_abs_path_folder_generation=True)
-
-        # Dump pickle file
-        with open(save_folder + save_name, "wb") as f:
+    if save_name:
+        try_gen_folder(save_folder)
+        output_file = Path(save_folder) / save_name
+        logging.info("Saving config to: %s", output_file)
+        with open(output_file, "wb") as f:
             pickle.dump(config_dict, f)
-
-        print("Saved to: ")
-        print(save_folder + save_name)
-
+        logging.info("Config saved successfully.")
     return {
         "config_dict": config_dict,
         "config_file_name": None if save_name is None else save_folder + save_name,
