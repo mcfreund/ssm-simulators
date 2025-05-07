@@ -178,15 +178,10 @@ def main(
         generator_config=config_dict["data_config"],
         model_config=config_dict["model_config"],
     )
-    if "cpn_only" in config_dict["data_config"]:
-        if config_dict["data_config"]["cpn_only"]:
-            my_dataset_generator.generate_data_training_uniform(
-                save=True, cpn_only=True
-            )
-        else:
-            my_dataset_generator.generate_data_training_uniform(
-                save=True, cpn_only=False
-            )
+
+    is_cpn = config_dict["data_config"].get("cpn_only", False)
+    my_dataset_generator.generate_data_training_uniform(save=True, cpn_only=is_cpn)
+
     logging.info("Data generation finished")
 
 
