@@ -163,12 +163,11 @@ def main(
         yaml_config_path=config_path, base_path=output
     )["config_dict"]
 
-    logging.info("Printing config specs:")
-    logging.info("GENERATOR CONFIG")
-    logging.info(pformat(config_dict["data_config"]))
+    logging.debug("GENERATOR CONFIG")
+    logging.debug(pformat(config_dict["data_config"]))
 
-    logging.info("MODEL CONFIG")
-    logging.info(pformat(config_dict["model_config"]))
+    logging.debug("MODEL CONFIG")
+    logging.debug(pformat(config_dict["model_config"]))
 
     # Make the generator
     logging.info("Generating data")
