@@ -167,13 +167,13 @@ def main(
 
     logging.info("Printing config specs:")
     logging.info("GENERATOR CONFIG")
-    logging.info(config_dict["data_config"])
+    logging.info(pformat(config_dict["data_config"]))
 
     logging.info("MODEL CONFIG")
-    logging.info(config_dict["model_config"])
+    logging.info(pformat(config_dict["model_config"]))
 
     # Make the generator
-    logging.info("Now generating data")
+    logging.info("Generating data")
     my_dataset_generator = ssms.dataset_generators.lan_mlp.data_generator(
         generator_config=config_dict["data_config"],
         model_config=config_dict["model_config"],
