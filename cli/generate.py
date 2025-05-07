@@ -67,12 +67,8 @@ def make_data_generator_configs(
     # Load copy of the respective data_generator_config dicts
     data_config = deepcopy(ssms.config.data_generator_config[generator_approach])
     data_config["model"] = model
-
-    for key, val in data_generator_arg_dict.items():
-        data_config[key] = val
-
-    for key, val in model_config_arg_dict.items():
-        model_config[key] = val
+    data_config.update(data_generator_arg_dict)
+    model_config.update(model_config_arg_dict)
 
     config_dict = {"model_config": model_config, "data_config": data_config}
 
