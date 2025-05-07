@@ -55,8 +55,8 @@ def try_gen_folder(
 def make_data_generator_configs(
     model="ddm",
     generator_approach="lan",
-    data_generator_arg_dict=None,
-    model_config_arg_dict=None,
+    data_generator_arg_dict={},
+    model_config_arg_dict={},
     save_name=None,
     save_folder="",
 ):
