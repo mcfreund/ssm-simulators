@@ -1,13 +1,15 @@
 import logging
 import pickle
+import warnings
 import yaml
 from copy import deepcopy
-import warnings
 from pathlib import Path
+from pprint import pformat
 
 import typer
 
 import ssms
+from ssms.config import get_data_generator_config, model_config as _model_config
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
