@@ -84,7 +84,8 @@ def make_data_generator_configs(
         try_gen_folder(folder=save_folder, allow_abs_path_folder_generation=True)
 
         # Dump pickle file
-        pickle.dump(config_dict, open(save_folder + save_name, "wb"))
+        with open(save_folder + save_name, "wb") as f:
+            pickle.dump(config_dict, f) 
 
         print("Saved to: ")
         print(save_folder + save_name)
@@ -96,7 +97,8 @@ def make_data_generator_configs(
 
 
 def get_data_generator_config(yaml_config_path=None, base_path=None):
-    basic_config = yaml.safe_load(open(yaml_config_path, "rb"))
+    with open(yaml_config_path, "rb") as f:
+        basic_config = yaml.safe_load(f)
 
     training_data_folder = (
         base_path
