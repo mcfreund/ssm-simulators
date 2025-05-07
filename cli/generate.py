@@ -99,15 +99,11 @@ def _get_data_generator_config(yaml_config_path=None, base_path=None, _model_con
     ]
 
     training_data_folder = (
-        base_path
-        + "data/training_data/"
-        + approach
-        + "/training_data_n_samples_"
-        + str(n_samples)
-        + "_dt_"
-        + str(delta_t)
-        + "/"
-        + str(model)
+        Path(base_path)
+        / "data/training_data"
+        / approach
+        / f"training_data_n_samples_{n_samples}_dt_{delta_t}"
+        / model
     )
 
     data_generator_arg_dict = {
