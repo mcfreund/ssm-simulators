@@ -407,6 +407,8 @@ def get_data_generator_config(approach) -> dict:
     }
 
     if approach not in config_functions:
-        raise KeyError(f"'{approach}' is not a valid data generator configuration approach.")
+        raise KeyError(
+            f"'{approach}' is not a valid data generator configuration approach."
+        )
 
     return config_functions[approach]()
