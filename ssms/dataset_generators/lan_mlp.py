@@ -155,6 +155,7 @@ class data_generator:  # noqa: N801
             self._get_ncpus()
 
         # Make output folder if not already present
+        # TODO: use pathlib for this
         folder_str_split = self.generator_config["output_folder"].split()
 
         cnt = 0
