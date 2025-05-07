@@ -618,16 +618,10 @@ class data_generator:  # noqa: N801
         )
 
         if save:
-            if not Path(self.generator_config["output_folder"]).exists():
-                Path(self.generator_config["output_folder"]).mkdir(parents=True)
-
-            full_file_name = (
-                self.generator_config["output_folder"]
-                + "/"
-                + "training_data_"
-                + uuid.uuid1().hex
-                + ".dill"
-            )  # self.model_config['name'] + '_' + \
+            output_folder = Path(self.generator_config["output_folder"])
+            output_folder.mkdir(parents=True, exist_ok=True)
+            full_file_name = output_folder / f"training_data_{uuid.uuid1().hex}.dill"
+            logger.info("Writing to file: %s", full_file_name)
 
             print("Writing to file: ", full_file_name)
 
