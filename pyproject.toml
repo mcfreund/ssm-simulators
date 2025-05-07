@@ -54,7 +54,7 @@ Homepage = "https://github.com/lnccbrown/ssm-simulators"
 "Bug Tracker" = "https://github.com/lnccbrown/ssm-simulators/issues"
 
 [tool.setuptools]
-packages = ["ssms"]
+packages = ["ssms", "cli"]
 
 [tool.pytest.ini_options]
 log_cli = true
@@ -151,3 +151,6 @@ omit = [
     "*/setup.py",
     "*/__init__.py"
 ]
+
+[project.scripts]
+generate = "cli.generate:app"
