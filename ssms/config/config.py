@@ -77,6 +77,15 @@ from ssms.config._modelconfig.dev_rlwm_lba import (
     get_dev_rlwm_lba_race_v2_config,
 )
 
+from ssms.config.generator_config.data_generator_config import (
+    get_opn_only_config,
+    get_cpn_only_config,
+    get_lan_config,
+    get_ratio_estimator_config,
+    get_defective_detector_config,
+    get_snpe_config,
+)
+
 
 def boundary_config_to_function_params(config: dict) -> dict:
     """
@@ -367,3 +376,15 @@ model_config["ddm_mic2_leak_weibull_no_bias_no_lowdim_noise"] = model_config[
 model_config["ddm_mic2_leak_conflict_gamma_no_bias_no_lowdim_noise"] = model_config[
     "ddm_mic2_leak_conflict_gamma_no_bias"
 ].copy()
+
+
+# TODO: remove this when the config is updated
+# For compatibility with script from lan pipeline
+data_generator_config = data_generator_config = {
+    "opn_only": get_opn_only_config(),
+    "cpn_only": get_cpn_only_config(),
+    "lan": get_lan_config(),
+    "ratio_estimator": get_ratio_estimator_config(),
+    "defective_detector": get_defective_detector_config(),
+    "snpe": get_snpe_config(),
+}
