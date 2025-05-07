@@ -121,8 +121,6 @@ def _get_data_generator_config(yaml_config_path=None, base_path=None, _model_con
         "cpn_only": True if (approach == "cpn") else False,
     }
 
-    model_config_arg_dict = {}
-
     config_dict = make_data_generator_configs(
         model=model,
         generator_approach=approach,
