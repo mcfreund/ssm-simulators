@@ -22,6 +22,7 @@ dependencies = [
     "pathos >= 0.3.0",
     "numpy>=1.26.4",
     "dill>=0.3.9",
+    "typer>=0.15.3",
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
