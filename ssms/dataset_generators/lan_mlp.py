@@ -623,14 +623,13 @@ class data_generator:  # noqa: N801
             full_file_name = output_folder / f"training_data_{uuid.uuid1().hex}.dill"
             logger.info("Writing to file: %s", full_file_name)
 
-            print("Writing to file: ", full_file_name)
-
-            dill.dump(
-                data,
-                Path(full_file_name).open("wb"),
-                protocol=self.generator_config["pickleprotocol"],
-            )
-            logger.info("Dataset completed")
+            with Path(full_file_name).open("wb") as file:
+                dill.dump(
+                    data,
+                    file,
+                    protocol=self.generator_config["pickleprotocol"],
+                )
+            logger.info("Data saved successfully")
 
         return data
 
