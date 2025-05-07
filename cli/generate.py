@@ -159,7 +159,7 @@ def main(
     config_path = str(config_path)
     output = str(output)
 
-    config_dict = get_data_generator_config(
+    config_dict = _get_data_generator_config(
         yaml_config_path=config_path, base_path=output
     )["config_dict"]
 
