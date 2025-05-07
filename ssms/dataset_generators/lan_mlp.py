@@ -610,8 +610,12 @@ class data_generator:  # noqa: N801
             ).astype(np.float32)
 
         # Add metadata to training_data
-        data["generator_config"] = self.generator_config
-        data["model_config"] = self.model_config
+        data.update(
+            {
+                "generator_config": self.generator_config,
+                "model_config": self.model_config,
+            }
+        )
 
         if save:
             if not Path(self.generator_config["output_folder"]).exists():
