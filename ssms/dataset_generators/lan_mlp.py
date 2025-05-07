@@ -155,19 +155,8 @@ class data_generator:  # noqa: N801
             self._get_ncpus()
 
         # Make output folder if not already present
-        # TODO: use pathlib for this
-        folder_str_split = self.generator_config["output_folder"].split()
-
-        cnt = 0
-        folder_partial = ""
-        for folder_str_part in folder_str_split:
-            if cnt > 0:
-                folder_partial += "/" + folder_str_part
-            else:
-                folder_partial += folder_str_part
-
-            if not Path(folder_partial).exists():
-                Path(folder_partial).mkdir(parents=True)
+        output_folder = Path(self.generator_config["output_folder"])
+        output_folder.mkdir(parents=True, exist_ok=True)
 
     def _get_ncpus(self):
         """Get the number cpus to use for parallelization."""
