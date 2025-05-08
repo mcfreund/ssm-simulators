@@ -87,7 +87,7 @@ def make_data_generator_configs(
 
 def _get_data_generator_config(yaml_config_path=None, base_path=None, _model_config={}):
     # Handle both file paths and file-like objects
-    if hasattr(yaml_config_path, 'read'):
+    if hasattr(yaml_config_path, "read"):
         # If it's a file-like object, read directly
         basic_config = yaml.safe_load(yaml_config_path)
     else:
