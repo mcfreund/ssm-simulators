@@ -67,6 +67,7 @@ ok_model_config = [
 subset_size = 1 + len(ok_model_config) // 10
 ok_model_config = random.sample(ok_model_config, subset_size)
 
+
 @pytest.mark.parametrize("model_name,model_conf", ok_model_config)
 def test_data_generator(model_name, model_conf):
     generator_config = deepcopy(gen_config)
