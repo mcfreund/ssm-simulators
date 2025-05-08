@@ -1,0 +1,113 @@
+import pytest
+import tempfile
+import yaml
+from pathlib import Path
+from unittest.mock import patch, MagicMock
+
+import ssms
+from cli.generate import (
+    try_gen_folder, 
+    make_data_generator_configs, 
+    _get_data_generator_config, 
+    main
+)
+
+def test_try_gen_folder():
+    # Test creating a folder
+    with tempfile.TemporaryDirectory() as temp_dir:
+        test_folder = Path(temp_dir) / 'test_folder'
+        try_gen_folder(test_folder)
+        assert test_folder.exists()
+        assert test_folder.is_dir()
+
+    # Test creating nested folders
+    with tempfile.TemporaryDirectory() as temp_dir:
+        test_nested_folder = Path(temp_dir) / 'parent' / 'child'
+        try_gen_folder(test_nested_folder)
+        assert test_nested_folder.exists()
+        assert test_nested_folder.is_dir()
+
+    # Test error when folder is None
+    with pytest.raises(ValueError, match="Folder path cannot be None or empty."):
+        try_gen_folder(None)
+
+    # Test warning for absolute path when not allowed
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir).resolve()
+        with pytest.warns(UserWarning, match="Absolute folder path provided"):
+            try_gen_folder(temp_path, allow_abs_path_folder_generation=False)
+
+def test_make_data_generator_configs():
+    # Test default configuration
+    result = make_data_generator_configs()
+    assert 'config_dict' in result
+    assert 'config_file_name' in result
+    assert result['config_file_name'] is None
+    
+    # Test with custom arguments
+    custom_config = make_data_generator_configs(
+        model='ddm', 
+        generator_approach='lan', 
+        data_generator_arg_dict={'n_samples': 1000},
+        model_config_arg_dict={'drift': 0.5},
+        save_name='test_config.pkl',
+        save_folder=tempfile.gettempdir()
+    )
+    assert custom_config['config_dict']['data_config']['n_samples'] == 1000
+    assert custom_config['config_dict']['model_config']['drift'] == 0.5
+    assert custom_config['config_file_name'] is not None
+
+def test_get_data_generator_config(tmp_path):
+    # Create a mock YAML configuration file
+    yaml_config = {
+        'GENERATOR_APPROACH': 'lan',
+        'N_SAMPLES': 1000,
+        'DELTA_T': 0.1,
+        'MODEL': 'ddm',
+        'N_PARAMETER_SETS': 10,
+        'N_TRAINING_SAMPLES_BY_PARAMETER_SET': 100,
+        'N_SUBRUNS': 1
+    }
+    yaml_path = tmp_path / 'config.yaml'
+    with open(yaml_path, 'w') as f:
+        yaml.dump(yaml_config, f)
+
+    # Test configuration retrieval
+    config_dict = _get_data_generator_config(
+        yaml_config_path=yaml_path, 
+        base_path=tmp_path
+    )
+    
+    assert 'config_dict' in config_dict
+    data_config = config_dict['config_dict']['data_config']
+    assert data_config['n_samples'] == 1000
+    assert data_config['model'] == 'ddm'
+    assert data_config['delta_t'] == 0.1
+
+@patch('ssms.dataset_generators.lan_mlp.data_generator')
+def test_main(mock_data_generator, tmp_path):
+    # Create a mock YAML configuration file
+    yaml_config = {
+        'GENERATOR_APPROACH': 'lan',
+        'N_SAMPLES': 1000,
+        'DELTA_T': 0.1,
+        'MODEL': 'ddm',
+        'N_PARAMETER_SETS': 10,
+        'N_TRAINING_SAMPLES_BY_PARAMETER_SET': 100,
+        'N_SUBRUNS': 1
+    }
+    config_path = tmp_path / 'config.yaml'
+    with open(config_path, 'w') as f:
+        yaml.dump(yaml_config, f)
+
+    # Prepare mock data generator
+    mock_generator_instance = MagicMock()
+    mock_data_generator.return_value = mock_generator_instance
+
+    # Call main with test configuration
+    with patch('typer.echo'), patch('typer.Exit'):
+        main(config_path=config_path, output=tmp_path)
+
+    # Verify data generator was called
+    mock_data_generator.assert_called_once()
+    mock_generator_instance.generate_data_training_uniform.assert_called_once_with(save=True, cpn_only=False)
