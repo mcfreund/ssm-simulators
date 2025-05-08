@@ -49,6 +49,7 @@ def test_make_data_generator_configs(tmp_path):
     assert custom_config['config_dict']['data_config']['n_samples'] == 1000
     assert custom_config['config_dict']['model_config']['drift'] == 0.5
     assert custom_config['config_file_name'] is not None
+    assert (tmp_path / 'test_config.pkl').exists()
 
 def test_get_data_generator_config(tmp_path):
     # Create a mock YAML configuration file
