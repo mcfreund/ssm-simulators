@@ -81,7 +81,7 @@ def make_data_generator_configs(
         logging.info("Config saved successfully.")
     return {
         "config_dict": config_dict,
-        "config_file_name": None if save_name is None else save_folder + save_name,
+        "config_file_name": None if save_name is None else output_file,
     }
 
 
