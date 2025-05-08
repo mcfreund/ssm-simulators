@@ -1,5 +1,4 @@
 import pytest
-import tempfile
 import yaml
 from pathlib import Path
 from unittest.mock import patch, MagicMock
@@ -12,32 +11,28 @@ from cli.generate import (
     main
 )
 
-def test_try_gen_folder():
+def test_try_gen_folder(tmp_path):
     # Test creating a folder
-    with tempfile.TemporaryDirectory() as temp_dir:
-        test_folder = Path(temp_dir) / 'test_folder'
-        try_gen_folder(test_folder)
-        assert test_folder.exists()
-        assert test_folder.is_dir()
+    test_folder = tmp_path / 'test_folder'
+    try_gen_folder(test_folder)
+    assert test_folder.exists()
+    assert test_folder.is_dir()
 
     # Test creating nested folders
-    with tempfile.TemporaryDirectory() as temp_dir:
-        test_nested_folder = Path(temp_dir) / 'parent' / 'child'
-        try_gen_folder(test_nested_folder)
-        assert test_nested_folder.exists()
-        assert test_nested_folder.is_dir()
+    test_nested_folder = tmp_path / 'parent' / 'child'
+    try_gen_folder(test_nested_folder)
+    assert test_nested_folder.exists()
+    assert test_nested_folder.is_dir()
 
     # Test error when folder is None
     with pytest.raises(ValueError, match="Folder path cannot be None or empty."):
         try_gen_folder(None)
 
     # Test warning for absolute path when not allowed
-    with tempfile.TemporaryDirectory() as temp_dir:
-        temp_path = Path(temp_dir).resolve()
-        with pytest.warns(UserWarning, match="Absolute folder path provided"):
-            try_gen_folder(temp_path, allow_abs_path_folder_generation=False)
+    with pytest.warns(UserWarning, match="Absolute folder path provided"):
+        try_gen_folder(tmp_path.resolve(), allow_abs_path_folder_generation=False)
 
-def test_make_data_generator_configs():
+def test_make_data_generator_configs(tmp_path):
     # Test default configuration
     result = make_data_generator_configs()
     assert 'config_dict' in result
@@ -51,7 +46,7 @@ def test_make_data_generator_configs():
         data_generator_arg_dict={'n_samples': 1000},
         model_config_arg_dict={'drift': 0.5},
         save_name='test_config.pkl',
-        save_folder=tempfile.gettempdir()
+        save_folder=tmp_path
     )
     assert custom_config['config_dict']['data_config']['n_samples'] == 1000
     assert custom_config['config_dict']['model_config']['drift'] == 0.5
