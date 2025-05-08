@@ -1,6 +1,7 @@
 import pytest
 import yaml
 from unittest.mock import patch, MagicMock
+import io
 
 from cli.generate import (
     try_gen_folder,
@@ -55,7 +56,7 @@ def test_make_data_generator_configs(tmp_path):
 
 
 def test_get_data_generator_config(tmp_path):
-    # Create a mock YAML configuration file
+    # Create a mock YAML configuration using StringIO
     yaml_config = {
         "GENERATOR_APPROACH": "lan",
         "N_SAMPLES": 1000,
@@ -65,13 +66,16 @@ def test_get_data_generator_config(tmp_path):
         "N_TRAINING_SAMPLES_BY_PARAMETER_SET": 100,
         "N_SUBRUNS": 1,
     }
-    yaml_path = tmp_path / "config.yaml"
-    with open(yaml_path, "w") as f:
-        yaml.dump(yaml_config, f)
+
+    # Use StringIO to create an in-memory file-like object
+    yaml_buffer = io.StringIO()
+    yaml.dump(yaml_config, yaml_buffer)
+    yaml_buffer.seek(0)  # Reset buffer position to the start
 
     # Test configuration retrieval
     config_dict = _get_data_generator_config(
-        yaml_config_path=yaml_path, base_path=tmp_path
+        yaml_config_path=yaml_buffer,
+        base_path=tmp_path
     )
 
     assert "config_dict" in config_dict
