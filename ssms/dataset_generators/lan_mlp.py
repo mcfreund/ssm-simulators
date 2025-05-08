@@ -623,7 +623,7 @@ class data_generator:  # noqa: N801
             full_file_name = output_folder / f"training_data_{uuid.uuid1().hex}.dill"
             logger.info("Writing to file: %s", full_file_name)
 
-            with Path(full_file_name).open("wb") as file:
+            with full_file_name.open("wb") as file:
                 dill.dump(
                     data,
                     file,
