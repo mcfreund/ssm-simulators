@@ -86,8 +86,14 @@ def make_data_generator_configs(
 
 
 def _get_data_generator_config(yaml_config_path=None, base_path=None, _model_config={}):
-    with open(yaml_config_path, "rb") as f:
-        basic_config = yaml.safe_load(f)
+    # Handle both file paths and file-like objects
+    if hasattr(yaml_config_path, 'read'):
+        # If it's a file-like object, read directly
+        basic_config = yaml.safe_load(yaml_config_path)
+    else:
+        # If it's a file path, open and read
+        with open(yaml_config_path, "rb") as f:
+            basic_config = yaml.safe_load(f)
 
     approach = basic_config["GENERATOR_APPROACH"]
     n_samples = basic_config["N_SAMPLES"]
