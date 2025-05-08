@@ -74,8 +74,7 @@ def test_get_data_generator_config(tmp_path):
 
     # Test configuration retrieval
     config_dict = _get_data_generator_config(
-        yaml_config_path=yaml_buffer,
-        base_path=tmp_path
+        yaml_config_path=yaml_buffer, base_path=tmp_path
     )
 
     assert "config_dict" in config_dict
