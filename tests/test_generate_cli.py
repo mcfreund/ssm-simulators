@@ -108,7 +108,7 @@ def test_main(mock_data_generator, tmp_path):
     # Call main with test configuration
     with patch("typer.echo"), patch("typer.Exit"):
         # Patch the yaml_file parameter to be None
-        with patch("cli.generate.main", wraps=main) as mock_main:
+        with patch("ssms.cli.generate.main", wraps=main) as mock_main:
             mock_main(config_path=config_path, output=tmp_path, yaml_file=None)
 
     # Verify data generator was called
