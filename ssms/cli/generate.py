@@ -2,6 +2,7 @@ import logging
 import pickle
 import warnings
 import yaml
+from collections import namedtuple
 from copy import deepcopy
 from pathlib import Path
 from pprint import pformat
@@ -85,8 +86,14 @@ def make_data_generator_configs(
     }
 
 
+def parse_dict_as_namedtuple(d: dict, to_lowercase: bool = True):
+    """Convert a dictionary to a named tuple."""
+    d = {k.lower() if to_lowercase else k: v for k, v in d.items()}
+    return namedtuple("Config", d.keys())(**d)
+
+
 def _get_data_generator_config(yaml_config_path=None, base_path=None, _model_config={}):
-    # Handle both file paths and file-like objects
+    # Handle both file paths and file-like objects (makes mock testing easier)
     if hasattr(yaml_config_path, "read"):
         # If it's a file-like object, read directly
         basic_config = yaml.safe_load(yaml_config_path)
@@ -95,37 +102,29 @@ def _get_data_generator_config(yaml_config_path=None, base_path=None, _model_con
         with open(yaml_config_path, "rb") as f:
             basic_config = yaml.safe_load(f)
 
-    approach = basic_config["GENERATOR_APPROACH"]
-    n_samples = basic_config["N_SAMPLES"]
-    delta_t = basic_config["DELTA_T"]
-    model = basic_config["MODEL"]
-    n_parameter_sets = basic_config["N_PARAMETER_SETS"]
-    n_training_samples_by_parameter_set = basic_config[
-        "N_TRAINING_SAMPLES_BY_PARAMETER_SET"
-    ]
-
+    bc = parse_dict_as_namedtuple(basic_config)
     training_data_folder = (
         Path(base_path)
         / "data/training_data"
-        / approach
-        / f"training_data_n_samples_{n_samples}_dt_{delta_t}"
-        / model
+        / bc.generator_approach
+        / f"training_data_n_samples_{bc.n_samples}_dt_{bc.delta_t}"
+        / bc.model
     )
 
     data_generator_arg_dict = {
         "output_folder": training_data_folder,
-        "model": model,
-        "n_samples": n_samples,
-        "n_parameter_sets": n_parameter_sets,
-        "delta_t": delta_t,
-        "n_training_samples_by_parameter_set": n_training_samples_by_parameter_set,
-        "n_subruns": basic_config["N_SUBRUNS"],
-        "cpn_only": True if (approach == "cpn") else False,
+        "model": bc.model,
+        "n_samples": bc.n_samples,
+        "n_parameter_sets": bc.n_parameter_sets,
+        "delta_t": bc.delta_t,
+        "n_training_samples_by_parameter_set": bc.n_training_samples_by_parameter_set,
+        "n_subruns": bc.n_subruns,
+        "cpn_only": True if (bc.generator_approach == "cpn") else False,
     }
 
     config_dict = make_data_generator_configs(
-        model=model,
-        generator_approach=approach,
+        model=bc.model,
+        generator_approach=bc.generator_approach,
         data_generator_arg_dict=data_generator_arg_dict,
         model_config_arg_dict=_model_config,
         save_name=None,
