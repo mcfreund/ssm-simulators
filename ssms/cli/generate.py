@@ -128,7 +128,7 @@ def _get_data_generator_config(yaml_config_path=None, base_path=None, _model_con
         save_name=None,
         save_folder=None,
     )
-    return config_dict
+    return config_dict["config_dict"]
 
 
 log_level_option = typer.Option(
@@ -178,7 +178,7 @@ def main(
 
     config_dict = _get_data_generator_config(
         yaml_config_path=config_path, base_path=output
-    )["config_dict"]
+    )
 
     logger.debug("GENERATOR CONFIG")
     logger.debug(pformat(config_dict["data_config"]))

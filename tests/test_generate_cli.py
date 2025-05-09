@@ -78,8 +78,7 @@ def test_get_data_generator_config(tmp_path):
         yaml_config_path=yaml_buffer, base_path=tmp_path
     )
 
-    assert "config_dict" in config_dict
-    data_config = config_dict["config_dict"]["data_config"]
+    data_config = config_dict["data_config"]
     assert data_config["n_samples"] == 1000
     assert data_config["model"] == "ddm"
     assert data_config["delta_t"] == 0.1
