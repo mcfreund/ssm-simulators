@@ -7,9 +7,22 @@ import pytest
 from ssms.cli.generate import (
     try_gen_folder,
     make_data_generator_configs,
-    _get_data_generator_config,
+    collect_data_generator_config,
     main,
 )
+
+
+@pytest.fixture
+def yaml_config():
+    return {
+        "GENERATOR_APPROACH": "lan",
+        "N_SAMPLES": 1000,
+        "DELTA_T": 0.1,
+        "MODEL": "ddm",
+        "N_PARAMETER_SETS": 10,
+        "N_TRAINING_SAMPLES_BY_PARAMETER_SET": 100,
+        "N_SUBRUNS": 1,
+    }
 
 
 def test_try_gen_folder(tmp_path):
@@ -55,25 +68,14 @@ def test_make_data_generator_configs(tmp_path):
     assert (tmp_path / "test_config.pkl").exists()
 
 
-def test_get_data_generator_config(tmp_path):
-    # Create a mock YAML configuration using StringIO
-    yaml_config = {
-        "GENERATOR_APPROACH": "lan",
-        "N_SAMPLES": 1000,
-        "DELTA_T": 0.1,
-        "MODEL": "ddm",
-        "N_PARAMETER_SETS": 10,
-        "N_TRAINING_SAMPLES_BY_PARAMETER_SET": 100,
-        "N_SUBRUNS": 1,
-    }
-
+def test_collect_data_generator_config(tmp_path, yaml_config):
     # Use StringIO to create an in-memory file-like object
     yaml_buffer = io.StringIO()
     yaml.dump(yaml_config, yaml_buffer)
     yaml_buffer.seek(0)  # Reset buffer position to the start
 
     # Test configuration retrieval
-    config_dict = _get_data_generator_config(
+    config_dict = collect_data_generator_config(
         yaml_config_path=yaml_buffer, base_path=tmp_path
     )
 
@@ -84,17 +86,7 @@ def test_get_data_generator_config(tmp_path):
 
 
 @patch("ssms.dataset_generators.lan_mlp.data_generator")
-def test_main(mock_data_generator, tmp_path):
-    # Create a mock YAML configuration file
-    yaml_config = {
-        "GENERATOR_APPROACH": "lan",
-        "N_SAMPLES": 1000,
-        "DELTA_T": 0.1,
-        "MODEL": "ddm",
-        "N_PARAMETER_SETS": 10,
-        "N_TRAINING_SAMPLES_BY_PARAMETER_SET": 100,
-        "N_SUBRUNS": 1,
-    }
+def test_main(mock_data_generator, tmp_path, yaml_config):
     config_path = tmp_path / "config.yaml"
     with open(config_path, "w") as f:
         yaml.dump(yaml_config, f)
@@ -110,7 +102,6 @@ def test_main(mock_data_generator, tmp_path):
             mock_main(
                 config_path=config_path,
                 output=tmp_path,
-                yaml_file=None,
                 log_level="info",
             )
 
