@@ -378,7 +378,7 @@ model_config["ddm_mic2_leak_conflict_gamma_no_bias_no_lowdim_noise"] = model_con
 ].copy()
 
 
-def get_data_generator_config(approach) -> dict:
+def get_default_generator_config(approach) -> dict:
     """
     Dynamically retrieve the data generator configuration for the given approach.
 
