@@ -87,23 +87,41 @@ def parse_dict_as_namedtuple(d: dict, to_lowercase: bool = True):
     return namedtuple("Config", d.keys())(**d)
 
 
-def _get_data_generator_config(yaml_config_path=None, base_path=None, _model_config={}):
-    # Handle both file paths and file-like objects (makes mock testing easier)
-    if hasattr(yaml_config_path, "read"):
-        # If it's a file-like object, read directly
-        basic_config = yaml.safe_load(yaml_config_path)
-    else:
-        # If it's a file path, open and read
-        with open(yaml_config_path, "rb") as f:
-            basic_config = yaml.safe_load(f)
-
-    bc = parse_dict_as_namedtuple(basic_config)
+def _make_data_folder_path(base_path: str | Path, basic_config: namedtuple) -> Path:
     training_data_folder = (
         Path(base_path)
         / "data/training_data"
-        / bc.generator_approach
-        / f"training_data_n_samples_{bc.n_samples}_dt_{bc.delta_t}"
-        / bc.model
+        / basic_config.generator_approach
+        / f"training_data_n_samples_{basic_config.n_samples}_dt_{basic_config.delta_t}"
+        / basic_config.model
+    )
+
+    return training_data_folder
+
+
+def get_basic_config_from_yaml(
+    yaml_config_path: str | Path, base_path: str | Path = None
+):
+    """Load the basic configuration from a YAML file."""
+    # Handle both file paths and file-like objects (makes mock testing easier)
+    if hasattr(yaml_config_path, "read"):
+        # If it's a file-like object, read directly
+        basic_config_from_yaml = yaml.safe_load(yaml_config_path)
+    else:
+        # If it's a file path, open and read
+        with open(yaml_config_path, "rb") as f:
+            basic_config_from_yaml = yaml.safe_load(f)
+    bc = parse_dict_as_namedtuple(basic_config_from_yaml)
+    training_data_folder = _make_data_folder_path(base_path=base_path, basic_config=bc)
+    return bc, training_data_folder
+
+
+def collect_data_generator_config(
+    yaml_config_path=None, base_path=None, extra_configs={}
+):
+    """Get the data generator configuration from a YAML file."""
+    bc, training_data_folder = get_basic_config_from_yaml(
+        yaml_config_path, base_path=base_path
     )
 
     data_generator_arg_dict = {
@@ -118,10 +136,10 @@ def _get_data_generator_config(yaml_config_path=None, base_path=None, _model_con
     }
 
     config_dict = make_data_generator_configs(
-        model=bc.model,
+        model=bc.model,  # TODO: model is already set in data_generator_arg_dict
         generator_approach=bc.generator_approach,
         data_generator_arg_dict=data_generator_arg_dict,
-        model_config_arg_dict=_model_config,
+        model_config_arg_dict=extra_configs,
         save_name=None,
         save_folder=None,
     )
@@ -145,9 +163,6 @@ log_level_option = typer.Option(
 def main(
     config_path: Path = typer.Option(None, help="Path to the YAML configuration file."),
     output: Path = typer.Option(None, help="Path to the output directory."),
-    yaml_file: Path = typer.Option(
-        None, help="Path to a YAML file containing arguments."
-    ),
     log_level: str = log_level_option,
 ):
     """
@@ -157,14 +172,8 @@ def main(
         level=log_level.upper(), format="%(asctime)s - %(levelname)s - %(message)s"
     )
     logger = logging.getLogger(__name__)
-    if yaml_file:
-        # Load arguments from the YAML file
-        with open(yaml_file, "r") as f:
-            config = yaml.safe_load(f)
-        config_path = Path(config["config_path"])
-        output = Path(config["output"])
 
-    if not config_path or not output:
+    if not any([config_path, output]):
         typer.echo("Both --config-path and --output must be provided.")
         raise typer.Exit(code=1)
 
@@ -173,7 +182,7 @@ def main(
     config_path = str(config_path)
     output = str(output)
 
-    config_dict = _get_data_generator_config(
+    config_dict = collect_data_generator_config(
         yaml_config_path=config_path, base_path=output
     )
 
@@ -182,8 +191,6 @@ def main(
 
     logger.debug("MODEL CONFIG")
     logger.debug(pformat(config_dict["model_config"]))
-
-    # assert False
 
     # Make the generator
     logger.info("Generating data")
