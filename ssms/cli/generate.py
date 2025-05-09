@@ -78,10 +78,7 @@ def make_data_generator_configs(
         with open(output_file, "wb") as f:
             pickle.dump(config_dict, f)
         logging.info("Config saved successfully.")
-    return {
-        "config_dict": config_dict,
-        "config_file_name": None if save_name is None else output_file,
-    }
+    return config_dict
 
 
 def parse_dict_as_namedtuple(d: dict, to_lowercase: bool = True):
@@ -128,7 +125,7 @@ def _get_data_generator_config(yaml_config_path=None, base_path=None, _model_con
         save_name=None,
         save_folder=None,
     )
-    return config_dict["config_dict"]
+    return config_dict
 
 
 log_level_option = typer.Option(

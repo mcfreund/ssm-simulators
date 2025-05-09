@@ -37,9 +37,9 @@ def test_try_gen_folder(tmp_path):
 def test_make_data_generator_configs(tmp_path):
     # Test default configuration
     result = make_data_generator_configs()
-    assert "config_dict" in result
-    assert "config_file_name" in result
-    assert result["config_file_name"] is None
+    assert isinstance(result, dict), "Default configuration should return a dictionary"
+    assert "model_config" in result
+    assert "data_config" in result
 
     # Test with custom arguments
     custom_config = make_data_generator_configs(
@@ -50,9 +50,8 @@ def test_make_data_generator_configs(tmp_path):
         save_name="test_config.pkl",
         save_folder=tmp_path,
     )
-    assert custom_config["config_dict"]["data_config"]["n_samples"] == 1000
-    assert custom_config["config_dict"]["model_config"]["drift"] == 0.5
-    assert custom_config["config_file_name"] is not None
+    assert custom_config["data_config"]["n_samples"] == 1000
+    assert custom_config["model_config"]["drift"] == 0.5
     assert (tmp_path / "test_config.pkl").exists()
 
 
