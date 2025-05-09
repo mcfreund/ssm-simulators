@@ -1,9 +1,10 @@
-import pytest
+import io
 import yaml
 from unittest.mock import patch, MagicMock
-import io
 
-from cli.generate import (
+import pytest
+
+from ssms.cli.generate import (
     try_gen_folder,
     make_data_generator_configs,
     _get_data_generator_config,
