@@ -1,3 +1,5 @@
+#!/usr/bin/env -S uv run --script
+
 import logging
 import pickle
 import warnings
@@ -11,10 +13,6 @@ import typer
 
 import ssms
 from ssms.config import get_default_generator_config, model_config as _model_config
-
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
 
 app = typer.Typer()
 
@@ -133,6 +131,19 @@ def _get_data_generator_config(yaml_config_path=None, base_path=None, _model_con
     return config_dict
 
 
+log_level_option = typer.Option(
+    "WARNING",
+    "--log-level",
+    "-l",
+    help="Set the logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL).",
+    case_sensitive=False,
+    show_default=True,
+    rich_help_panel="Logging",
+    metavar="LEVEL",
+    autocompletion=lambda: ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+)
+
+
 @app.command()
 def main(
     config_path: Path = typer.Option(None, help="Path to the YAML configuration file."),
@@ -140,10 +151,15 @@ def main(
     yaml_file: Path = typer.Option(
         None, help="Path to a YAML file containing arguments."
     ),
+    log_level: str = log_level_option,
 ):
     """
     Generate data using the specified configuration.
     """
+    logging.basicConfig(
+        level=log_level.upper(), format="%(asctime)s - %(levelname)s - %(message)s"
+    )
+    logger = logging.getLogger(__name__)
     if yaml_file:
         # Load arguments from the YAML file
         with open(yaml_file, "r") as f:
@@ -164,14 +180,16 @@ def main(
         yaml_config_path=config_path, base_path=output
     )["config_dict"]
 
-    logging.debug("GENERATOR CONFIG")
-    logging.debug(pformat(config_dict["data_config"]))
+    logger.debug("GENERATOR CONFIG")
+    logger.debug(pformat(config_dict["data_config"]))
 
-    logging.debug("MODEL CONFIG")
-    logging.debug(pformat(config_dict["model_config"]))
+    logger.debug("MODEL CONFIG")
+    logger.debug(pformat(config_dict["model_config"]))
+
+    # assert False
 
     # Make the generator
-    logging.info("Generating data")
+    logger.info("Generating data")
     my_dataset_generator = ssms.dataset_generators.lan_mlp.data_generator(
         generator_config=config_dict["data_config"],
         model_config=config_dict["model_config"],
@@ -180,7 +198,7 @@ def main(
     is_cpn = config_dict["data_config"].get("cpn_only", False)
     my_dataset_generator.generate_data_training_uniform(save=True, cpn_only=is_cpn)
 
-    logging.info("Data generation finished")
+    logger.info("Data generation finished")
 
 
 if __name__ == "__main__":
