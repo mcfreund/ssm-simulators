@@ -3,6 +3,26 @@
 Convenience functions for getting default configurations for data generation.
 """
 
+import warnings
+
+
+class DeprecatedDict(dict):
+
+    def __init__(self, lookup_func=None, alternative="get_default_generator_config"):
+        self._lookup_func = lookup_func
+        self._alternative = alternative
+
+    def __getitem__(self, key):
+        message = f"Accessing this configuration dict is deprecated and will be removed in a future version. Use `{self._alternative}` instead."
+        warnings.warn(
+            message,
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        if self._lookup_func is None or not callable(self._lookup_func):
+            raise ValueError("A valid callable lookup_func must be provided.")
+        return self._lookup_func(key)
+
 
 def get_kde_simulation_filters() -> dict:
     return {
@@ -178,3 +198,10 @@ def get_default_generator_config(approach) -> dict:
         )
 
     return config_functions[approach]()
+
+
+# TODO: Add for compatibility with lanfactory's test_end_to_end.py test. Delete when
+#       lanfactory uses get_default_generator_config.
+data_generator_config = DeprecatedDict(
+    get_default_generator_config, "get_default_generator_config"
+)
