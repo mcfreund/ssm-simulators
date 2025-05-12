@@ -7,6 +7,18 @@ import warnings
 
 
 class DeprecatedDict(dict):
+    """
+    A pseudo-dictionary that raises a DeprecationWarning when accessed.
+    This is used to indicate that the configuration dictionary is deprecated
+    and should not be used directly.
+
+    Parameters
+    ----------
+    lookup_func : callable, optional
+        A function that takes a key and returns the corresponding value.
+    alternative : str, optional
+        A string indicating the alternative method to use instead of this
+        configuration dictionary."""
 
     def __init__(self, lookup_func=None, alternative="get_default_generator_config"):
         self._lookup_func = lookup_func
