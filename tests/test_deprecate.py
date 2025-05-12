@@ -16,6 +16,6 @@ def test_deprecated_dict():
         deprecated_dict = DeprecatedDict(
             get_default_generator_config, "get_default_generator_config"
         )
-    assert isinstance(
-        deprecated_dict, DeprecatedDict
-    ), "The object is not an instance of DeprecatedDict"
+    assert isinstance(deprecated_dict, DeprecatedDict), (
+        "The object is not an instance of DeprecatedDict"
+    )
