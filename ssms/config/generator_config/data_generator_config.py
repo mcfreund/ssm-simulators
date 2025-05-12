@@ -145,6 +145,13 @@ def get_default_generator_config(approach) -> dict:
     ----------
     approach : str
         The approach corresponding to the desired data generator configuration.
+        Valid options include:
+        - "opn_only"
+        - "cpn_only"
+        - "lan"
+        - "ratio_estimator"
+        - "defective_detector"
+        - "snpe"
 
     Returns
     -------
