@@ -341,8 +341,8 @@ model_config = {
     "tradeoff_conflict_gamma_no_bias": get_tradeoff_conflict_gamma_no_bias_config(),
 }
 
-model_config["weibull_cdf"] = model_config["weibull"].copy()
-model_config["full_ddm2"] = model_config["full_ddm"].copy()
+model_config["weibull_cdf"] = get_weibull_config()
+model_config["full_ddm2"] = get_full_ddm_config()
 model_config["ddm_mic2_ornstein_no_bias_no_lowdim_noise"] = model_config[
     "ddm_mic2_ornstein_no_bias"
 ].copy()

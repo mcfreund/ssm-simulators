@@ -17,6 +17,9 @@ from .generator_config.data_generator_config import (
     get_cpn_only_config,
     get_kde_simulation_filters,
     get_defective_detector_config,
+    get_ratio_estimator_config,
+    get_default_generator_config,
+    data_generator_config,  # TODO: remove from interface in v1.0.0
 )
 
 from ._modelconfig.base import boundary_config, drift_config
@@ -32,4 +35,7 @@ __all__ = [
     "get_cpn_only_config",
     "get_kde_simulation_filters",
     "get_defective_detector_config",
+    "get_ratio_estimator_config",
+    "get_default_generator_config",
+    "data_generator_config",  # TODO: remove from interface in v1.0.0
 ]
