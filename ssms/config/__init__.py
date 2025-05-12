@@ -9,7 +9,6 @@ parameter settings across simulations.
 from .config import (
     boundary_config_to_function_params,
     model_config,
-    get_default_generator_config,
 )
 
 from .generator_config.data_generator_config import (
@@ -18,6 +17,8 @@ from .generator_config.data_generator_config import (
     get_cpn_only_config,
     get_kde_simulation_filters,
     get_defective_detector_config,
+    get_ratio_estimator_config,
+    get_default_generator_config,
 )
 
 from ._modelconfig.base import boundary_config, drift_config
@@ -33,5 +34,6 @@ __all__ = [
     "get_cpn_only_config",
     "get_kde_simulation_filters",
     "get_defective_detector_config",
+    "get_ratio_estimator_config",
     "get_default_generator_config",
 ]

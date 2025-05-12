@@ -74,15 +74,15 @@ def get_lan_config() -> dict:
     }
 
 
-def get_defective_detector_config() -> dict:
+def get_ratio_estimator_config() -> dict:
     return {
-        "output_folder": "data/defective_detector/",
+        "output_folder": "data/ratio/",
         "model": "ddm",
         "nbins": 0,
-        "n_samples": {"low": 100_000, "high": 100_000},
-        "n_parameter_sets": 100_000,
+        "n_samples": {"low": 100000, "high": 100000},
+        "n_parameter_sets": 100000,
         "n_parameter_sets_rejected": 100,
-        "n_training_samples_by_parameter_set": 1_000,
+        "n_training_samples_by_parameter_set": 1000,
         "max_t": 20.0,
         "delta_t": 0.001,
         "pickleprotocol": 4,
@@ -98,15 +98,15 @@ def get_defective_detector_config() -> dict:
     }
 
 
-def get_ratio_estimator_config() -> dict:
+def get_defective_detector_config() -> dict:
     return {
-        "output_folder": "data/ratio/",
+        "output_folder": "data/defective_detector/",
         "model": "ddm",
         "nbins": 0,
-        "n_samples": {"low": 100000, "high": 100000},
-        "n_parameter_sets": 100000,
+        "n_samples": {"low": 100_000, "high": 100_000},
+        "n_parameter_sets": 100_000,
         "n_parameter_sets_rejected": 100,
-        "n_training_samples_by_parameter_set": 1000,
+        "n_training_samples_by_parameter_set": 1_000,
         "max_t": 20.0,
         "delta_t": 0.001,
         "pickleprotocol": 4,
@@ -135,3 +135,39 @@ def get_snpe_config() -> dict:
         "n_subruns": 10,
         "separate_response_channels": False,
     }
+
+
+def get_default_generator_config(approach) -> dict:
+    """
+    Dynamically retrieve the data generator configuration for the given approach.
+
+    Parameters
+    ----------
+    approach : str
+        The approach corresponding to the desired data generator configuration.
+
+    Returns
+    -------
+    dict
+        The configuration dictionary for the specified approach.
+
+    Raises
+    ------
+    KeyError
+        If the approach is not found in the available configurations.
+    """
+    config_functions = {
+        "opn_only": get_opn_only_config,
+        "cpn_only": get_cpn_only_config,
+        "lan": get_lan_config,
+        "ratio_estimator": get_ratio_estimator_config,
+        "defective_detector": get_defective_detector_config,
+        "snpe": get_snpe_config,
+    }
+
+    if approach not in config_functions:
+        raise KeyError(
+            f"'{approach}' is not a valid data generator configuration approach."
+        )
+
+    return config_functions[approach]()

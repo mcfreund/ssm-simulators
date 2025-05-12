@@ -376,39 +376,3 @@ model_config["ddm_mic2_leak_weibull_no_bias_no_lowdim_noise"] = model_config[
 model_config["ddm_mic2_leak_conflict_gamma_no_bias_no_lowdim_noise"] = model_config[
     "ddm_mic2_leak_conflict_gamma_no_bias"
 ].copy()
-
-
-def get_default_generator_config(approach) -> dict:
-    """
-    Dynamically retrieve the data generator configuration for the given approach.
-
-    Parameters
-    ----------
-    approach : str
-        The approach corresponding to the desired data generator configuration.
-
-    Returns
-    -------
-    dict
-        The configuration dictionary for the specified approach.
-
-    Raises
-    ------
-    KeyError
-        If the approach is not found in the available configurations.
-    """
-    config_functions = {
-        "opn_only": get_opn_only_config,
-        "cpn_only": get_cpn_only_config,
-        "lan": get_lan_config,
-        "ratio_estimator": get_ratio_estimator_config,
-        "defective_detector": get_defective_detector_config,
-        "snpe": get_snpe_config,
-    }
-
-    if approach not in config_functions:
-        raise KeyError(
-            f"'{approach}' is not a valid data generator configuration approach."
-        )
-
-    return config_functions[approach]()
