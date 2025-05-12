@@ -77,15 +77,6 @@ from ssms.config._modelconfig.dev_rlwm_lba import (
     get_dev_rlwm_lba_race_v2_config,
 )
 
-from ssms.config.generator_config.data_generator_config import (
-    get_opn_only_config,
-    get_cpn_only_config,
-    get_lan_config,
-    get_ratio_estimator_config,
-    get_defective_detector_config,
-    get_snpe_config,
-)
-
 
 def boundary_config_to_function_params(config: dict) -> dict:
     """
