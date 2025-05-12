@@ -161,8 +161,8 @@ log_level_option = typer.Option(
 
 @app.command()
 def main(
-    config_path: Path = typer.Option(None, help="Path to the YAML configuration file."),
-    output: Path = typer.Option(None, help="Path to the output directory."),
+    config_path: Path = typer.Option(..., help="Path to the YAML configuration file."),
+    output: Path = typer.Option(..., help="Path to the output directory."),
     log_level: str = log_level_option,
 ):
     """
@@ -172,10 +172,6 @@ def main(
         level=log_level.upper(), format="%(asctime)s - %(levelname)s - %(message)s"
     )
     logger = logging.getLogger(__name__)
-
-    if not any([config_path, output]):
-        typer.echo("Both --config-path and --output must be provided.")
-        raise typer.Exit(code=1)
 
     # Casting config_path to str for now
     # TODO: Fix this in the future
