@@ -6,16 +6,11 @@ from ssms.config.generator_config.data_generator_config import (
 )
 
 
-def test_deprecated_dict():
-    """
-    Test the DeprecatedDict class to ensure it raises a DeprecationWarning
-    when accessed.
-    """
-    _match = "Accessing this configuration dict is deprecated and will be removed in a future version. Use `get_default_generator_config` instead."
-    with pytest.warns(DeprecationWarning, match=_match):
-        deprecated_dict = DeprecatedDict(
-            get_default_generator_config, "get_default_generator_config"
-        )
-    assert isinstance(deprecated_dict, DeprecatedDict), (
-        "The object is not an instance of DeprecatedDict"
-    )
+def test_deprecated_dict_warns(recwarn):
+    d = DeprecatedDict(lambda x: x, "replacement")
+    val = d["foo"]
+    w = recwarn.pop(DeprecationWarning)
+    message = str(w.message)
+    assert "deprecated" in message
+    assert "replacement" in message
+    assert val == "foo"
