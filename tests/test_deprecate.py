@@ -1,8 +1,5 @@
-import pytest
-
 from ssms.config.generator_config.data_generator_config import (
     DeprecatedDict,
-    get_default_generator_config,
 )
 
 
