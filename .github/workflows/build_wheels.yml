@@ -11,56 +11,23 @@ on:
       - published
 
 jobs:
-  build_artifacts:
-    name: Build wheels and sdist on Ubuntu
+  build_and_publish:
     runs-on: ubuntu-22.04
-      # strategy:
-        # matrix:
-        # macos-13 is an intel runner, macos-14 is apple silicon
-        # os: [ubuntu-22.04, windows-2022, macos-13, macos-14]
+    if: github.event_name == 'release' && github.event.action == 'published'
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Install uv
         uses: astral-sh/setup-uv@v6
         with:
           version: "0.7.3"
 
-      - name: Build wheels and sdist
-        run: uv build --wheel --sdist --out-dir dist
+      - name: Build the wheel and sdist
+        run: uv build
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: dist-artifacts
-          path: dist/*
+      - name: Publish to TestPyPI
+        run: uv publish --token ${{ secrets.TEST_PYPI_TOKEN }} --index testpypi
 
-  upload_test_pypi:
-    needs: build_artifacts
-    runs-on: ubuntu-latest
-    if: github.event_name == 'release' && github.event.action == 'published'
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: "*"
-          path: dist
-          merge-multiple: true
-
-      - uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          password: ${{ secrets.TEST_PYPI_TOKEN }}
-          repository-url: https://test.pypi.org/legacy/
-
-  upload_pypi:
-    needs: [build_artifacts, upload_test_pypi]
-    runs-on: ubuntu-latest
-    if: github.event_name == 'release' && github.event.action == 'published'
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: "*"
-          path: dist
-          merge-multiple: true
-
-      - uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          password: ${{ secrets.PYPI_TOKEN }}
+      - name: Publish to PyPI
+        run: uv publish --token ${{ secrets.PYPI_TOKEN }}
