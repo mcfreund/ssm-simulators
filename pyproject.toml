@@ -1,13 +1,6 @@
 [build-system]
-requires = ["uv_build>=0.7.3,<0.8.0"]
-build-backend = "uv_build"
-
-[tool.uv.build-backend]
-# not recommended to have a module name different than the project name
-# see: https://docs.astral.sh/uv/reference/settings/#build-backend_module-name
-module-name = "ssms"
-module-root = ""
-
+requires = ["setuptools", "wheel", "Cython>=0.29.23", "numpy >= 2.0"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "ssm-simulators"
@@ -59,6 +52,9 @@ dev = [
 [project.urls]
 Homepage = "https://github.com/lnccbrown/ssm-simulators"
 "Bug Tracker" = "https://github.com/lnccbrown/ssm-simulators/issues"
+
+[tool.setuptools]
+packages = ["ssms"]
 
 [tool.pytest.ini_options]
 log_cli = true
