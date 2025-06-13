@@ -30,7 +30,7 @@ def test_data_persistance(tmp_path):
     my_dataset_generator.generate_data_training_uniform(save=True)
     new_data_file = list(tmp_path.iterdir())[0]
     assert new_data_file.exists()
-    assert new_data_file.suffix == ".dill"
+    assert new_data_file.suffix == ".pickle"
 
 
 @pytest.mark.parametrize("model_name", list(model_config.keys()))
