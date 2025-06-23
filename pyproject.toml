@@ -21,7 +21,6 @@ dependencies = [
     "psutil >= 5.0.0",
     "pathos >= 0.3.0",
     "numpy>=2.0",
-    "dill>=0.3.9",
     "typer>=0.15.3",
 ]
 classifiers = [

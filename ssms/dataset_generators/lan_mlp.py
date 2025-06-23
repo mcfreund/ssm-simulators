@@ -11,7 +11,7 @@ from copy import deepcopy
 from functools import partial
 from pathlib import Path
 
-import dill
+import pickle
 import numpy as np
 import psutil
 from pathos.multiprocessing import ProcessingPool as Pool
@@ -620,11 +620,11 @@ class data_generator:  # noqa: N801
         if save:
             output_folder = Path(self.generator_config["output_folder"])
             output_folder.mkdir(parents=True, exist_ok=True)
-            full_file_name = output_folder / f"training_data_{uuid.uuid1().hex}.dill"
+            full_file_name = output_folder / f"training_data_{uuid.uuid1().hex}.pickle"
             logger.info("Writing to file: %s", full_file_name)
 
             with full_file_name.open("wb") as file:
-                dill.dump(
+                pickle.dump(
                     data,
                     file,
                     protocol=self.generator_config["pickleprotocol"],
