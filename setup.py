@@ -34,9 +34,4 @@ setup(
         "pyyaml",
         "typer",
     ],
-    entry_points={
-        "console_scripts": [
-            "generate=ssms.generate:main",
-        ],
-    },
 )
