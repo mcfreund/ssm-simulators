@@ -90,8 +90,8 @@ class SimpleThetaProcessor(AbstractThetaProcessor):
             "ds_conflict_drift",
             "ds_conflict_drift_angle",
             "ds_conflict_stimflexons_drift",
-            "ds_conflict_stimflexons_drift_angle"
-            ]:
+            "ds_conflict_stimflexons_drift_angle",
+        ]:
             theta["v"] = np.tile(np.array([0], dtype=np.float32), n_trials)
 
         if model in ["ddm_st"]:

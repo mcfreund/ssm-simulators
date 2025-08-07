@@ -240,9 +240,9 @@ def attend_drift_simple(
 
 def stimflexons_support(t, onset, coh):
     """
-    Construct a rectangular coherence timecourse, with discrete and 
+    Construct a rectangular coherence timecourse, with discrete and
     potentially variable onset of stimulus evidence.
-    
+
     Arguments
     ---------
         t: np.ndarray
@@ -272,10 +272,10 @@ def ds_conflict_stimflexons_drift(
     tcoh: float = 1.0,
     dcoh: float = 1.0,
     tonset: float = 0,
-    donset: float = 0
+    donset: float = 0,
 ) -> np.ndarray:
     """Drift function for conflict task with stimuli with potentially variable onset.
-    
+
     Arguments:
     ---------
         t: np.ndarray
