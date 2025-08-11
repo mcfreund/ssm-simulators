@@ -1458,5 +1458,5 @@ expected_shapes = {
         "opn_data": (100, 13),
         "opn_labels": (100, 1),
         "thetas": (100, 13),
-    },    
+    },
 }
