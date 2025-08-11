@@ -64,9 +64,7 @@ def gamma_drift(
 
 
 def ds_support_analytic(
-    t: np.ndarray = np.arange(  # noqa: B008
-        0, 10, 0.001
-    ),  # TODO: #81 B008 Do not perform function call `np.arange` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable  # noqa: B008, FIX002
+    t: np.ndarray | None,
     init_p: float = 0,
     fix_point: float = 1,
     slope: float = 2,
@@ -94,13 +92,14 @@ def ds_support_analytic(
     np.ndarray
          The gamma drift evaluated at the supplied timepoints t.
     """
+    if t is None:
+        t = np.arange(0, 20, 0.1)
+
     return (init_p - fix_point) * np.exp(-(slope * t)) + fix_point
 
 
 def ds_conflict_drift(
-    t: np.ndarray = np.arange(  # noqa: B008
-        0, 10, 0.001
-    ),  # TODO: #81 B008 Do not perform function call `np.arange` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable  # noqa: B008, FIX002
+    t: np.ndarray | None,
     tinit: float = 0,
     dinit: float = 0,
     tslope: float = 1,
@@ -142,6 +141,8 @@ def ds_conflict_drift(
     np.ndarray
          The full drift timecourse evaluated at the supplied timepoints t.
     """  # noqa: D205, D401, D404
+    if t is None:
+        t = np.arange(0, 20, 0.1)
     w_t = ds_support_analytic(t=t, init_p=tinit, fix_point=tfixedp, slope=tslope)
 
     w_d = ds_support_analytic(t=t, init_p=dinit, fix_point=0, slope=dslope)
@@ -238,7 +239,7 @@ def attend_drift_simple(
     return v_t
 
 
-def stimflexons_support(t, onset, coh):
+def stimflexons_support(t: np.ndarray, onset: float, coh: float) -> np.ndarray:
     """
     Construct a rectangular coherence timecourse, with discrete and
     potentially variable onset of stimulus evidence.
@@ -256,14 +257,12 @@ def stimflexons_support(t, onset, coh):
         np.ndarray: Array of coherence values, same length as t.
     """
     cohs = np.zeros_like(t)
-    cohs[(t >= onset)] = coh
+    cohs[t >= onset] = coh
     return cohs
 
 
 def ds_conflict_stimflexons_drift(
-    t: np.ndarray = np.arange(  # noqa: B008
-        0, 10, 0.001
-    ),  # TODO: #81 B008 Do not perform function call `np.arange` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable  # noqa: B008, FIX002
+    t: np.ndarray | None,
     tinit: float = 0,
     dinit: float = 0,
     tslope: float = 1,
@@ -300,6 +299,8 @@ def ds_conflict_stimflexons_drift(
         donset: float
             Onset time of the distractor stimulus coherence.
     """
+    if t is None:
+        t = np.arange(0, 20, 0.1)
     tcohs = stimflexons_support(t, tonset, tcoh)
     dcohs = stimflexons_support(t, donset, dcoh)
 
