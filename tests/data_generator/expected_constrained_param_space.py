@@ -872,7 +872,7 @@ expected_constrained_param_space = {
         "sv": (0.001, 2.0),
         "st": (0.001, 0.25),
     },
-    "ds_conflict_drift": {
+    "ds_conflict_stimflexons_drift": {
         "a": (0.3, 3.0),
         "z": (0.1, 0.9),
         "t": (0.001, 2.0),
@@ -886,7 +886,7 @@ expected_constrained_param_space = {
         "tonset": (0.0, 1.0),
         "donset": (0.0, 1.0),
     },
-    "ds_conflict_drift_angle": {
+    "ds_conflict_stimflexons_drift_angle": {
         "a": (0.3, 3.0),
         "z": (0.1, 0.9),
         "t": (0.001, 2.0),
