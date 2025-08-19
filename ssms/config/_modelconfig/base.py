@@ -60,6 +60,18 @@ drift_config = {
             "donset",
         ],
     },
+    "ds_conflict_gridcoh_drift": {
+        "fun": df.ds_conflict_gridcoh_drift,
+        "params": [
+            "tinit",
+            "dinit",
+            "tslope",
+            "dslope",
+            "tfixedp",
+            "tcoh",
+            "dcoh",
+        ],
+    },
     "attend_drift": {
         "fun": df.attend_drift,
         "params": ["ptarget", "pouter", "pinner", "r", "sda"],

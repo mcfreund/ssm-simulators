@@ -151,3 +151,35 @@ def get_ds_conflict_stimflexons_drift_angle_config():
         "n_particles": 1,
         "simulator": cssm.ddm_flex,
     }
+
+
+def get_ds_conflict_gridcoh_drift_config():
+    return {
+        "name": "ds_conflict_gridcoh_drift",
+        "params": [
+            "a",
+            "z",
+            "t",
+            "tinit",
+            "dinit",
+            "tslope",
+            "dslope",
+            "tfixedp",
+            "tcoh",
+            "dcoh",
+        ],
+        "param_bounds": [
+            [0.3, 0.1, 1e-3, 0.0, 0.0, 0.01, 0.01, 0.0, -1.0, -1.0],
+            [3.0, 0.9, 2.0, 5.0, 5.0, 5.0, 5.0, 5.0, 1.0, 1.0],
+        ],
+        "boundary_name": "constant",
+        "boundary": bf.constant,
+        "drift_name": "ds_conflict_gridcoh_drift",
+        "drift_fun": df.ds_conflict_gridcoh_drift,
+        "n_params": 10,
+        "default_params": [2.0, 0.5, 1.0, 2.0, 2.0, 2.0, 2.0, 3.0, 0.5, -0.5],
+        "nchoices": 2,
+        "choices": [-1, 1],
+        "n_particles": 1,
+        "simulator": cssm.ddm_flex,
+    }

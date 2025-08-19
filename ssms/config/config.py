@@ -28,6 +28,7 @@ from ssms.config._modelconfig.ds_conflict_drift import (
     get_ds_conflict_drift_angle_config,
     get_ds_conflict_stimflexons_drift_config,
     get_ds_conflict_stimflexons_drift_angle_config,
+    get_ds_conflict_gridcoh_drift_config
 )
 from ssms.config._modelconfig.lca import (
     get_lca_3_config,
@@ -173,6 +174,7 @@ model_config = {
     "ds_conflict_drift_angle": get_ds_conflict_drift_angle_config(),
     "ds_conflict_stimflexons_drift": get_ds_conflict_stimflexons_drift_config(),
     "ds_conflict_stimflexons_drift_angle": get_ds_conflict_stimflexons_drift_angle_config(),
+    "ds_conflict_gridcoh_drift": get_ds_conflict_gridcoh_drift_config(),
     "ornstein": {
         "name": "ornstein",
         "params": ["v", "a", "z", "g", "t"],

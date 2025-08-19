@@ -311,6 +311,65 @@ def ds_conflict_stimflexons_drift(
     return v_t
 
 
+def ds_conflict_gridcoh_drift(
+    t: np.ndarray | None,
+    tinit: float = 0,
+    dinit: float = 0,
+    tslope: float = 1,
+    dslope: float = 1,
+    tfixedp: float = 1,
+    tcoh: np.ndarray | float = 1.0,
+    dcoh: np.ndarray | float = -1.0,
+) -> np.ndarray:
+    """Drift function for conflict task with stimuli with coherences varying within-trial over a time grid.
+
+    Arguments:
+    ---------
+        t: np.ndarray
+            Timepoints at which to evaluate the drift.
+            Usually np.arange() of some sort.
+        tcoh: float
+            Coherence of the target stimulus. Length must be integer 
+            multiple of number of timepoints.
+        dcoh: float
+            Coherence of the distractor stimulus. Length must be integer 
+            multiple of number of timepoints.
+        tinit: float
+            Initial condition of target drift timecourse.
+        dinit: float
+            Initial condition of distractor drift timecourse.
+        tslope: float
+            Slope parameter for target drift timecourse.
+        dslope: float
+            Slope parameter for distractor drift timecourse.
+        tfixedp: float
+            Fixed point for target drift timecourse.
+    """
+    if t is None:
+        t = np.arange(0, 20, 0.001)
+    if isinstance(tcoh, (int, float)):
+        tcoh = np.array([tcoh])
+    if isinstance(dcoh, (int, float)):
+        dcoh = np.array([dcoh])
+
+    if len(tcoh) != len(dcoh):
+        raise ValueError(f"tcoh and dcoh must have the same length")
+    
+    n_bins = len(tcoh)
+    n_times = len(t)
+    if n_times % n_bins != 0:
+        raise ValueError(f"Number of timepoints ({n_times}) must be an integer multiple of number of coherence bins ({n_bins})")
+    t_per_bin = n_times // n_bins
+    tcohs = np.repeat(tcoh, t_per_bin)
+    dcohs = np.repeat(dcoh, t_per_bin)
+
+    w_t = ds_support_analytic(t=t, init_p=tinit, fix_point=tfixedp, slope=tslope)
+    w_d = ds_support_analytic(t=t, init_p=dinit, fix_point=0, slope=dslope)
+    v_t = (w_t * tcohs) + (w_d * dcohs)
+
+    return v_t
+
+
 # Type alias for drift functions
 DriftFunction = Callable[..., np.ndarray]
 
@@ -320,3 +379,4 @@ gamma_drift: DriftFunction = gamma_drift  # noqa: PLW0127
 ds_support_analytic: DriftFunction = ds_support_analytic  # noqa: PLW0127
 ds_conflict_drift: DriftFunction = ds_conflict_drift  # noqa: PLW0127
 ds_conflict_stimflexons_drift: DriftFunction = ds_conflict_stimflexons_drift  # noqa: PLW0127
+ds_conflict_gridcoh_drift: DriftFunction = ds_conflict_gridcoh_drift  # noqa: PLW0127
