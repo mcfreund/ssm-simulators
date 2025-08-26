@@ -3,10 +3,13 @@ from copy import deepcopy
 
 import numpy as np
 import pytest
-from expected_shapes import get_expected_shapes
 
 from ssms.config import get_lan_config, model_config
 from ssms.dataset_generators.lan_mlp import data_generator
+
+from expected_shapes import get_expected_shapes
+from expected_constrained_param_space import infer_constrained_param_space
+
 
 N_PARAMETER_SETS = random.randint(2, 10)
 N_TRAINING_SAMPLES_BY_PARAMETER_SET = random.randint(2, 10)
@@ -101,6 +104,10 @@ def test_data_generator(model_name, model_conf):
     assert td_array_shapes == get_expected_shapes(
         model_conf, N_PARAMETER_SETS, N_TRAINING_SAMPLES_BY_PARAMETER_SET
     )
+
+    assert training_data["model_config"][
+        "constrained_param_space"
+    ] == infer_constrained_param_space(model_config[model_name])
 
 
 def test_data_persistance(tmp_path):
