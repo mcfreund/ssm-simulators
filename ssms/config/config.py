@@ -18,6 +18,9 @@ from ssms.config._modelconfig.tradeoff import (
     get_tradeoff_weibull_no_bias_config,
     get_tradeoff_conflict_gamma_no_bias_config,
 )
+from ssms.config._modelconfig.ddm import (
+    get_ddm_config,
+)
 from ssms.config._modelconfig.full_ddm import (
     get_full_ddm_config,
     get_full_ddm_rv_config,
@@ -105,7 +108,7 @@ def boundary_config_to_function_params(config: dict) -> dict:
 model_config_getter = get_model_config()
 # Configuration dictionary for simulators
 model_config = {
-    "ddm": model_config_getter["ddm"],
+    "ddm": get_ddm_config(),
     "ddm_legacy": {
         "name": "ddm_legacy",
         "params": ["v", "a", "z", "t"],
@@ -162,7 +165,7 @@ model_config = {
         "boundary": bf.angle,
         "drift_name": "gamma_drift",
         "drift_fun": df.gamma_drift,
-        "n_params": 7,
+        "n_params": 8,
         "default_params": [0.0, 1.0, 0.5, 0.25, 0.0, 5.0, 0.5, 1.0],
         "nchoices": 2,
         "choices": [-1, 1],
