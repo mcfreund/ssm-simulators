@@ -388,5 +388,3 @@ def _validate_simulator_fun(simulator_fun: Any) -> tuple[str, list, int]:
     obs_dim_int = obs_dim
 
     return model_name, choices, obs_dim_int
-
-
