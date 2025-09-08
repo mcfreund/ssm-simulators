@@ -219,14 +219,27 @@ def decorate_atomic_simulator(
     choices: list | np.ndarray = [-1, 1],
     obs_dim: int = 2,
 ):
-    """Decorate to add attributes to simulator functions.
+    """
+    Decorator to add metadata attributes to simulator functions.
+
+    This decorator attaches the following attributes to the decorated function:
+    - model_name: Name of the model.
+    - choices: List or array of possible choices/responses.
+    - obs_dim: Number of observation dimensions.
 
     Parameters
     ----------
     model_name : str
-        Name of the model
-    choices : list
-        List of possible choices/responses
+        Name of the model.
+    choices : list or np.ndarray, optional
+        List or array of possible choices/responses (default: [-1, 1]).
+    obs_dim : int, optional
+        Number of observation dimensions (default: 2).
+
+    Returns
+    -------
+    Callable
+        Decorator that adds attributes to the simulator function.
     """
 
     def decorator(func):
