@@ -217,7 +217,7 @@ def _validate_simulator_fun_arg(simulator_fun: Any) -> None:
 def decorate_atomic_simulator(
     model_name: str,
     choices: list | np.ndarray = [-1, 1],
-    obs_dim: int = 2,
+    obs_dim: int = 2,  # At least for now ssms models all fall under 2 obs dims
 ):
     """
     Decorator to add metadata attributes to simulator functions.
