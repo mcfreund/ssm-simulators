@@ -222,7 +222,7 @@ def decorate_atomic_simulator(
     """
     Decorator to add metadata attributes to simulator functions.
 
-    This decorator attaches the following attributes to the decorated function:
+    This decorator attaches the following attributes to the decorated function as expected of simulators in HSSM:
     - model_name: Name of the model.
     - choices: List or array of possible choices/responses.
     - obs_dim: Number of observation dimensions.
