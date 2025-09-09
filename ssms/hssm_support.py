@@ -251,7 +251,7 @@ def decorate_atomic_simulator(
     return decorator
 
 
-def ssms_sim_wrapper(simulator_fun, theta, model, n_replicas, random_state, **kwargs):
+def hssm_sim_wrapper(simulator_fun, theta, model, n_replicas, random_state, **kwargs):
     """Wrap a ssms simulator function to match HSSM's expected interface.
 
     Parameters
@@ -312,7 +312,7 @@ def _build_decorated_simulator(model_name: str, choices: list) -> Callable:
         obs_dim=2,
     )
     sim_wrapper = partial(
-        ssms_sim_wrapper,
+        hssm_sim_wrapper,
         simulator_fun=simulator,
         model=model_name,
     )

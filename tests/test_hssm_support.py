@@ -18,7 +18,7 @@ from ssms.hssm_support import (
     _get_p_outlier,
     _validate_simulator_fun_arg,
     decorate_atomic_simulator,
-    ssms_sim_wrapper,
+    hssm_sim_wrapper,
     _build_decorated_simulator,
     _get_simulator_fun_internal,
     _validate_simulator_fun,
@@ -382,16 +382,16 @@ class TestDecorateAtomicSimulator:
 
 
 class TestSsmsSimWrapper:
-    """Tests for ssms_sim_wrapper function."""
+    """Tests for hssm_sim_wrapper function."""
 
-    def test_ssms_sim_wrapper_basic(self):
-        """Test basic functionality of ssms_sim_wrapper."""
+    def test_hssm_sim_wrapper_basic(self):
+        """Test basic functionality of hssm_sim_wrapper."""
 
         def mock_simulator_fun(theta, model, n_samples, random_state, **kwargs):
             return {"rts": np.array([1.0, 2.0]), "choices": np.array([0, 1])}
 
         theta = np.array([[1, 2, 3]])
-        result = ssms_sim_wrapper(
+        result = hssm_sim_wrapper(
             simulator_fun=mock_simulator_fun,
             theta=theta,
             model="ddm",
@@ -402,8 +402,8 @@ class TestSsmsSimWrapper:
         expected = np.array([[1.0, 0], [2.0, 1]])
         np.testing.assert_array_equal(result, expected)
 
-    def test_ssms_sim_wrapper_with_kwargs(self):
-        """Test ssms_sim_wrapper passes through kwargs."""
+    def test_hssm_sim_wrapper_with_kwargs(self):
+        """Test hssm_sim_wrapper passes through kwargs."""
 
         def mock_simulator_fun(
             theta, model, n_samples, random_state, custom_param=None, **kwargs
@@ -412,7 +412,7 @@ class TestSsmsSimWrapper:
             return {"rts": np.array([1.5]), "choices": np.array([1])}
 
         theta = np.array([[1, 2]])
-        result = ssms_sim_wrapper(
+        result = hssm_sim_wrapper(
             simulator_fun=mock_simulator_fun,
             theta=theta,
             model="ddm",
