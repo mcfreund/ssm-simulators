@@ -30,6 +30,34 @@ from .generator_config.data_generator_config import (
 from ._modelconfig.base import boundary_config, drift_config
 from .kde_constants import KDE_NO_DISPLACE_T  # noqa: F401
 
+
+def boundary_config_to_function_params(config: dict) -> dict:
+    """
+    Convert boundary configuration to function parameters.
+
+    Parameters
+    ----------
+    config: dict
+        Dictionary containing the boundary configuration
+
+    Returns
+    -------
+    dict
+        Dictionary with adjusted key names so that they match function parameters names
+        directly.
+    """
+    return {f"boundary_{k}": v for k, v in config.items()}
+
+
+class CopyOnAccessDict(dict):
+    """A dict that returns a deep copy of the value on lookup."""
+
+    def __getitem__(self, key):
+        return copy.deepcopy(super().__getitem__(key))
+
+
+model_config = CopyOnAccessDict(get_model_config())
+
 __all__ = [
     "model_config",
     "boundary_config",
