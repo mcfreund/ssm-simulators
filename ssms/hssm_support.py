@@ -216,7 +216,7 @@ def _validate_simulator_fun_arg(simulator_fun: Any) -> None:
 
 def decorate_atomic_simulator(
     model_name: str,
-    choices: list | np.ndarray = [-1, 1],
+    choices: list | np.ndarray | None,
     obs_dim: int = 2,  # At least for now ssms models all fall under 2 obs dims
 ):
     """
@@ -241,6 +241,8 @@ def decorate_atomic_simulator(
     Callable
         Decorator that adds attributes to the simulator function.
     """
+
+    choices = [-1, 1] if choices is None else choices
 
     def decorator(func):
         func.model_name = model_name
