@@ -23,7 +23,7 @@ def get_ddm_config():
 
 
 def get_ddm_legacy_config():
-    """Get the configuration for the DDM model."""
+    """Get the configuration for the DDM legacy model."""
     return {
         "name": "ddm_legacy",
         "params": ["v", "a", "z", "t"],
