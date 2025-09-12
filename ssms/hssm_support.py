@@ -193,14 +193,15 @@ def _get_p_outlier(cls: _HasListParams, arg_arrays):
     return p_outlier, arg_arrays
 
 
-def _validate_simulator_fun_arg(simulator_fun: Any) -> None:
+def _validate_simulator_fun_arg(simulator_fun: str | Callable) -> None:
     """
     Validate the simulator function argument.
 
     Parameters
     ----------
     simulator_fun : Callable or str
-        The simulator function or the name of the model as a string.
+        The simulator function or the name of the model as a string. If a string, we assume
+        it is a valid model in the ssm-simulators package.
 
     Raises
     ------
@@ -345,11 +346,6 @@ def _get_simulator_fun_internal(simulator_fun: Callable | str):
     if callable(simulator_fun):
         return cast("Callable[..., Any]", simulator_fun)
 
-    # If simulator_fun is passed as a string,
-    # we assume it is a valid model in the
-    # ssm-simulators package.
-    if not isinstance(simulator_fun, str):
-        raise ValueError("simulator_fun must be a string or callable.")
     simulator_fun_str = simulator_fun
     if simulator_fun_str not in ssms_model_config:
         _logger.warning(
