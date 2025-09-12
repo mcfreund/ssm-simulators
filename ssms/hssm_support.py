@@ -209,7 +209,7 @@ def _validate_simulator_fun_arg(simulator_fun: Any) -> None:
     """
     if not (isinstance(simulator_fun, str) or callable(simulator_fun)):
         raise ValueError(
-            "The simulator argument must be a string or a callable, "
+            "`simulator_fun` must be a string or a callable, "
             f"but you passed {type(simulator_fun)}."
         )
 
