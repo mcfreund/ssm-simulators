@@ -340,7 +340,7 @@ class TestValidateSimulatorFunArg:
     @pytest.mark.parametrize("bad_input", bad_simulator_types)
     def test_validate_simulator_fun_arg_invalid(self, bad_input):
         """Test _validate_simulator_fun_arg with invalid input."""
-        match = "The simulator argument must be a string or a callable"
+        match = "`simulator_fun` must be a string or a callable"
         with pytest.raises(ValueError, match=match):
             _validate_simulator_fun_arg(bad_input)
 
@@ -493,9 +493,8 @@ class TestGetSimulatorFunInternal:
 
     def test_get_simulator_fun_internal_invalid_type(self):
         """Test _get_simulator_fun_internal with invalid type."""
-        with pytest.raises(
-            ValueError, match="The simulator argument must be a string or a callable"
-        ):
+        match = "`simulator_fun` must be a string or a callable"
+        with pytest.raises(ValueError, match=match):
             _get_simulator_fun_internal(123)
 
 
