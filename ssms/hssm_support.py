@@ -293,7 +293,9 @@ def hssm_sim_wrapper(simulator_fun, theta, model, n_replicas, random_state, **kw
     return np.stack([out["rts"], out["choices"]], axis=-1).squeeze()
 
 
-def _build_decorated_simulator(model_name: str, choices: list) -> Callable:
+def _build_decorated_simulator(
+    model_name: str, choices: list, obs_dim: int = 2
+) -> Callable:
     """
     Build a decorated simulator function for a given model and choices.
 
@@ -312,7 +314,7 @@ def _build_decorated_simulator(model_name: str, choices: list) -> Callable:
     decorated_simulator = decorate_atomic_simulator(
         model_name=model_name,
         choices=choices,
-        obs_dim=2,
+        obs_dim=obs_dim,
     )
     sim_wrapper = partial(
         hssm_sim_wrapper,
