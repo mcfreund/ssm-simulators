@@ -1,5 +1,11 @@
-from . import basic_simulators, config, dataset_generators, support_utils, hssm_support  # noqa: D104
+import importlib.metadata
 
-__version__ = "0.9.0"  # importlib.metadata.version(__package__ or __name__)
+from . import basic_simulators
+from . import dataset_generators
+from . import config
+from . import support_utils
+from . import hssm_support
+
+__version__ = importlib.metadata.version("ssm-simulators")
 
 __all__ = ["basic_simulators", "dataset_generators", "config", "support_utils", "hssm_support"]
