@@ -149,10 +149,7 @@ warn_return_any = true
 warn_unused_configs = true
 
 [tool.coverage.run]
-omit = [
-    "*/setup.py",
-    "*/__init__.py"
-]
+omit = ["*/setup.py", "*/__init__.py"]
 
 [project.scripts]
 generate = "ssms.cli.generate:app"
