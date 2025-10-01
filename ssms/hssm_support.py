@@ -124,7 +124,16 @@ def _prepare_theta_and_shape(arg_arrays, size):
         theta = np.stack(arg_arrays)
         if theta.ndim > 1:
             theta = theta.squeeze(axis=-1)
-        theta = np.tile(theta, (size, 1))
+
+        if isinstance(size, tuple) and len(size) == 1:
+            size_ = size[0]
+        elif isinstance(size, int):
+            size_ = size
+        else:
+            raise ValueError(
+                f"Size must be a tuple of length 1 or an integer, but got {type(size)}"
+            )
+        theta = np.tile(theta, (size_, 1))
         return True, theta, None, None
 
     # Preprocess all parameters, reshape them into a matrix of dimension
