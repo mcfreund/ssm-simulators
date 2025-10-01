@@ -1,5 +1,5 @@
 from functools import partial
-from typing import Any, Callable, Protocol, cast
+from typing import Any, Callable, Protocol, cast, TYPE_CHECKING
 import logging
 
 import numpy as np
@@ -7,14 +7,18 @@ import numpy as np
 from .basic_simulators.simulator import simulator
 from .config import model_config as ssms_model_config
 
+if TYPE_CHECKING:
+    from bambi import Prior
+
 _logger = logging.getLogger(__name__)
 
 
-class _HasListParams(Protocol):  # for mypy
+class _RandomVariable(Protocol):  # for mypy
     _list_params: list[str]
+    _lapse: "Prior"  # bmb.Prior in actual usage, not included in ssm-simulators
 
 
-def _create_arg_arrays(cls: _HasListParams, args: tuple) -> list[np.ndarray]:
+def _create_arg_arrays(cls: _RandomVariable, args: tuple) -> list[np.ndarray]:
     """
     Create argument arrays from input arguments.
 
@@ -193,7 +197,7 @@ def _validate_size(size_val: int, new_data_size: int) -> None:
         raise ValueError("`size` needs to be a multiple of the size of data")
 
 
-def _get_p_outlier(cls: _HasListParams, arg_arrays):
+def _get_p_outlier(cls: _RandomVariable, arg_arrays):
     """Get p_outlier from arg_arrays and update arg_arrays."""
     list_params = cls._list_params
     p_outlier = None
@@ -333,7 +337,7 @@ def _build_decorated_simulator(
     return decorated_simulator(sim_wrapper)
 
 
-def _get_simulator_fun_internal(simulator_fun: Callable | str):
+def get_simulator_fun_internal(simulator_fun: Callable | str):
     """
     Get the internal simulator function for a given model.
 
@@ -374,7 +378,7 @@ def _get_simulator_fun_internal(simulator_fun: Callable | str):
     return simulator_fun_internal
 
 
-def _validate_simulator_fun(simulator_fun: Any) -> tuple[str, list, int]:
+def validate_simulator_fun(simulator_fun: Any) -> tuple[str, list, int]:
     """
     Validate that the simulator function has required attributes.
 
@@ -410,3 +414,98 @@ def _validate_simulator_fun(simulator_fun: Any) -> tuple[str, list, int]:
     obs_dim_int = obs_dim
 
     return model_name, choices, obs_dim_int
+
+
+# pragma: no cover
+def rng_fn(
+    cls: _RandomVariable,
+    rng: np.random.Generator,
+    simulator_fun: Callable,
+    apply_lapse_model: Callable,
+    choices: list | np.ndarray,
+    obs_dim_int: int,
+    *args,
+    **kwargs,
+) -> np.ndarray:
+    """
+    Generate random variables from this distribution using the provided simulator function.
+
+    Parameters
+    ----------
+    cls : _RandomVariable
+        The class (or object) containing the `_list_params` and `_lapse` attributes.
+    rng : np.random.Generator
+        Random number generator for reproducibility.
+    simulator_fun : Callable
+        The simulator function to generate samples.
+    apply_lapse_model : Callable
+        Function to apply a lapse model to the simulated data.
+    choices : list or np.ndarray
+        List or array of possible choices/responses.
+    obs_dim_int : int
+        Number of observation dimensions.
+    *args : tuple
+        Model parameters, in the order of `_list_params`, with the last argument as size.
+    **kwargs : dict
+        Additional keyword arguments passed to the simulator function.
+
+    Returns
+    -------
+    np.ndarray
+        An array of shape (..., obs_dim_int) containing generated (rt, response) pairs.
+
+    Note
+    ----
+    How size is handled in this method:
+
+    We apply multiple tricks to get this method to work with ssm_simulators.
+
+    First, size could be an array with one element. We squeeze the array and
+    use that element as size.
+
+    Then, size could depend on whether the parameters passed to this method.
+    If all parameters passed are scalar, that is the easy case. We just
+    assemble all parameters into a 1D array and pass it to the `theta`
+    argument. In this case, size is number of observations.
+
+    If one of the parameters is a vector, which happens one or more parameters
+    is the target of a regression. In this case, we take the size of the
+    parameter with the largest size. If size is None, we will set size to be
+    this largest size. If size is not None, we check if size is a multiple of
+    the largest size. If not, an error is thrown. Otherwise, we assemble the
+    parameter as a matrix and pass it as the `theta` argument. The multiple then
+    becomes how many samples we draw from each trial.
+    """
+    # First figure out what the size specified here is
+    # Since the number of unnamed arguments is undetermined,
+    # we are going to use this hack.
+    size, args, kwargs = _extract_size(args, kwargs)
+
+    arg_arrays = _create_arg_arrays(cls, args)
+    p_outlier, arg_arrays = _get_p_outlier(cls, arg_arrays)
+    seed = _get_seed(rng)
+
+    is_all_args_scalar, theta, max_shape, new_data_size = _prepare_theta_and_shape(
+        arg_arrays, size
+    )
+    n_replicas = _calculate_n_replicas(is_all_args_scalar, size, new_data_size)
+
+    sims_out = simulator_fun(
+        theta=theta,
+        random_state=seed,
+        n_replicas=n_replicas,
+        **kwargs,
+    )
+
+    if not is_all_args_scalar:
+        shape_spec = _reshape_sims_out(max_shape, n_replicas, obs_dim_int)
+        sims_out = sims_out.reshape(shape_spec)
+
+    sims_out = apply_lapse_model(
+        sims_out=sims_out,
+        p_outlier=p_outlier,
+        rng=rng,
+        lapse_dist=cls._lapse,
+        choices=choices,
+    )
+    return sims_out
