@@ -421,7 +421,6 @@ def rng_fn(
     cls: _RandomVariable,
     rng: np.random.Generator,
     simulator_fun: Callable,
-    apply_lapse_model: Callable,
     choices: list | np.ndarray,
     obs_dim_int: int,
     *args,
@@ -438,8 +437,6 @@ def rng_fn(
         Random number generator for reproducibility.
     simulator_fun : Callable
         The simulator function to generate samples.
-    apply_lapse_model : Callable
-        Function to apply a lapse model to the simulated data.
     choices : list or np.ndarray
         List or array of possible choices/responses.
     obs_dim_int : int
