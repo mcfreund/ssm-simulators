@@ -501,11 +501,4 @@ def rng_fn(
         shape_spec = _reshape_sims_out(max_shape, n_replicas, obs_dim_int)
         sims_out = sims_out.reshape(shape_spec)
 
-    sims_out = apply_lapse_model(
-        sims_out=sims_out,
-        p_outlier=p_outlier,
-        rng=rng,
-        lapse_dist=cls._lapse,
-        choices=choices,
-    )
     return sims_out
