@@ -425,7 +425,7 @@ def rng_fn(
     obs_dim_int: int,
     *args,
     **kwargs,
-) -> np.ndarray:
+) -> tuple[np.ndarray, np.ndarray]:
     """
     Generate random variables from this distribution using the provided simulator function.
 
@@ -448,8 +448,9 @@ def rng_fn(
 
     Returns
     -------
-    np.ndarray
-        An array of shape (..., obs_dim_int) containing generated (rt, response) pairs.
+    tuple[np.ndarray, np.ndarray]
+        An array of shape (..., obs_dim_int) containing generated (rt, response) pairs and
+        the p_outlier values if applicable.
 
     Note
     ----
@@ -498,4 +499,4 @@ def rng_fn(
         shape_spec = _reshape_sims_out(max_shape, n_replicas, obs_dim_int)
         sims_out = sims_out.reshape(shape_spec)
 
-    return sims_out
+    return sims_out, p_outlier
