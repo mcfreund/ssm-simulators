@@ -144,15 +144,6 @@ def _validate_size(size_val: int, new_data_size: int) -> None:
         raise ValueError("`size` needs to be a multiple of the size of data")
 
 
-def _get_p_outlier(cls: _RandomVariable, arg_arrays):
-    """Get p_outlier from arg_arrays and update arg_arrays."""
-    list_params = cls._list_params
-    p_outlier = None
-    if list_params and list_params[-1] == "p_outlier":
-        p_outlier = arg_arrays.pop(-1)
-    return p_outlier, arg_arrays
-
-
 def _validate_simulator_fun_arg(simulator_fun: str | Callable) -> None:
     """
     Validate the simulator function argument.
