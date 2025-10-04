@@ -356,7 +356,8 @@ def validate_simulator_fun(simulator_fun: Any) -> tuple[str, list, int]:
 
 # pragma: no cover
 def rng_fn(
-    cls: _RandomVariable,
+    arg_arrays: list[np.ndarray],
+    size: int | tuple | None,
     rng: np.random.Generator,
     simulator_fun: Callable,
     obs_dim_int: int,
@@ -368,8 +369,10 @@ def rng_fn(
 
     Parameters
     ----------
-    cls : _RandomVariable
-        The class (or object) containing the `_list_params` and `_lapse` attributes.
+    arg_arrays : list of np.ndarray
+        List of argument arrays corresponding to model parameters.
+    size : int, tuple, or None
+        The total number of samples to be drawn. If None or 1, only one replica
     rng : np.random.Generator
         Random number generator for reproducibility.
     simulator_fun : Callable
@@ -386,37 +389,7 @@ def rng_fn(
     tuple[np.ndarray, np.ndarray]
         An array of shape (..., obs_dim_int) containing generated (rt, response) pairs and
         the p_outlier values if applicable.
-
-    Note
-    ----
-    How size is handled in this method:
-
-    We apply multiple tricks to get this method to work with ssm_simulators.
-
-    First, size could be an array with one element. We squeeze the array and
-    use that element as size.
-
-    Then, size could depend on whether the parameters passed to this method.
-    If all parameters passed are scalar, that is the easy case. We just
-    assemble all parameters into a 1D array and pass it to the `theta`
-    argument. In this case, size is number of observations.
-
-    If one of the parameters is a vector, which happens one or more parameters
-    is the target of a regression. In this case, we take the size of the
-    parameter with the largest size. If size is None, we will set size to be
-    this largest size. If size is not None, we check if size is a multiple of
-    the largest size. If not, an error is thrown. Otherwise, we assemble the
-    parameter as a matrix and pass it as the `theta` argument. The multiple then
-    becomes how many samples we draw from each trial.
     """
-    # First figure out what the size specified here is
-    # Since the number of unnamed arguments is undetermined,
-    # we are going to use this hack.
-    size, args, kwargs = _extract_size(args, kwargs)
-
-    arg_arrays = _create_arg_arrays(cls, args)
-    p_outlier, arg_arrays = _get_p_outlier(cls, arg_arrays)
-    seed = _get_seed(rng)
 
     is_all_args_scalar, theta, max_shape, new_data_size = _prepare_theta_and_shape(
         arg_arrays, size
