@@ -421,7 +421,6 @@ def rng_fn(
     cls: _RandomVariable,
     rng: np.random.Generator,
     simulator_fun: Callable,
-    choices: list | np.ndarray,
     obs_dim_int: int,
     *args,
     **kwargs,
@@ -437,8 +436,6 @@ def rng_fn(
         Random number generator for reproducibility.
     simulator_fun : Callable
         The simulator function to generate samples.
-    choices : list or np.ndarray
-        List or array of possible choices/responses.
     obs_dim_int : int
         Number of observation dimensions.
     *args : tuple
