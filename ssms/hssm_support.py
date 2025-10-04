@@ -7,8 +7,6 @@ import numpy as np
 from .basic_simulators.simulator import simulator
 from .config import model_config as ssms_model_config
 
-if TYPE_CHECKING:
-    from bambi import Prior
 
 _logger = logging.getLogger(__name__)
 
