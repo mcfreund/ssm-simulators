@@ -395,7 +395,7 @@ def rng_fn(
         arg_arrays, size
     )
     n_replicas = _calculate_n_replicas(is_all_args_scalar, size, new_data_size)
-
+    seed = _get_seed(rng)
     sims_out = simulator_fun(
         theta=theta,
         random_state=seed,
