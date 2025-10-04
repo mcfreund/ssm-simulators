@@ -11,33 +11,6 @@ from .config import model_config as ssms_model_config
 _logger = logging.getLogger(__name__)
 
 
-class _RandomVariable(Protocol):  # for mypy
-    _list_params: list[str]
-    _lapse: "Prior"  # bmb.Prior in actual usage, not included in ssm-simulators
-
-
-def _create_arg_arrays(cls: _RandomVariable, args: tuple) -> list[np.ndarray]:
-    """
-    Create argument arrays from input arguments.
-
-    Parameters
-    ----------
-    cls : type
-        The class containing `_list_params`.
-    args : tuple
-        Input arguments.
-
-    Returns
-    -------
-    list of np.ndarray
-        List of argument arrays.
-    """
-    num_params = len(cls._list_params)
-    n_args = min(num_params, len(args))
-    arg_arrays = [np.asarray(arg) for arg in args[:n_args]]
-    return arg_arrays
-
-
 def _extract_size_val(size: tuple | int) -> int:
     """Extract integer value from size, handling tuple or scalar."""
     if isinstance(size, tuple):
