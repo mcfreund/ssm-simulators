@@ -51,30 +51,6 @@ def _calculate_n_replicas(is_all_args_scalar, size, new_data_size):
     return size_val // new_data_size
 
 
-def _extract_size(args, kwargs):
-    """Extract size from args and kwargs.
-
-    Returns
-    -------
-    size : int
-        The size of the random sample to generate.
-    args : tuple
-        The original arguments, with size removed if it was present.
-    kwargs : dict
-        The original keyword arguments, with size removed if it was present.
-    """
-    if "size" in kwargs:
-        size = kwargs.pop("size")
-    else:
-        size = args[-1]
-        args = args[:-1]
-
-    if size is None:
-        size = 1
-
-    return size, args, kwargs
-
-
 def _get_seed(rng):
     """Get a seed for the random number generator."""
     iinfo32 = np.iinfo(np.uint32)
