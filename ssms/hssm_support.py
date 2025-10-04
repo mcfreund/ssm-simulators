@@ -407,4 +407,4 @@ def rng_fn(
         shape_spec = _reshape_sims_out(max_shape, n_replicas, obs_dim_int)
         sims_out = sims_out.reshape(shape_spec)
 
-    return sims_out, p_outlier
+    return sims_out
