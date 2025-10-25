@@ -200,7 +200,7 @@ class SimpleThetaProcessor(AbstractThetaProcessor):
                 [theta["vRL0"], theta["vRL1"], theta["vRL2"]]
             )
             theta["vWM"] = np.column_stack(
-                [theta["vWMM0"], theta["vWM1"], theta["vWM2"]]
+                [theta["vWM0"], theta["vWM1"], theta["vWM2"]]
             )
             theta["a"] = np.expand_dims(theta["a"], axis=1)
             theta["z"] = np.expand_dims(theta["z"], axis=1)
