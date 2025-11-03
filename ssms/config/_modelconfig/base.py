@@ -42,12 +42,12 @@ drift_config = {
         "fun": df.gamma_drift,
         "params": ["shape", "scale", "c"],
     },
-    "ds_conflict_drift": {
-        "fun": df.ds_conflict_drift,
+    "conflict_ds_drift": {
+        "fun": df.conflict_ds_drift,
         "params": ["tinit", "dinit", "tslope", "dslope", "tfixedp", "tcoh", "dcoh"],
     },
-    "ds_conflict_stimflexons_drift": {
-        "fun": df.ds_conflict_stimflexons_drift,
+    "conflict_dsstimflex_drift": {
+        "fun": df.conflict_dsstimflex_drift,
         "params": [
             "tinit",
             "dinit",
@@ -58,6 +58,34 @@ drift_config = {
             "dcoh",
             "tonset",
             "donset",
+        ],
+    },
+    "conflict_stimflex_drift": {
+        "fun": df.conflict_stimflex_drift,
+        "params": [
+            "v_t",
+            "v_d",
+            "tcoh",
+            "dcoh",
+            "tonset",
+            "donset",
+        ],
+    },
+    "conflict_stimflexrel1_drift": {
+        "fun": df.conflict_stimflexrel1_drift,
+        "params": ["v_t", "v_d", "tcoh", "dcoh", "tonset", "donset"],
+    },
+    "conflict_stimflexrel1_dual_drift": {
+        "fun": df.conflict_stimflexrel1_dual_drift,
+        "params": [
+            "v_t",
+            "v_d",
+            "tcoh",
+            "dcoh",
+            "tonset",
+            "donset",
+            "toffset",
+            "doffset",
         ],
     },
     "attend_drift": {

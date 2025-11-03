@@ -2,6 +2,7 @@
 
 # External
 from collections.abc import Callable
+from functools import partial
 
 import numpy as np
 from scipy.stats import norm
@@ -98,7 +99,7 @@ def ds_support_analytic(
     return (init_p - fix_point) * np.exp(-(slope * t)) + fix_point
 
 
-def ds_conflict_drift(
+def conflict_ds_drift(
     t: np.ndarray | None,
     tinit: float = 0,
     dinit: float = 0,
@@ -239,10 +240,12 @@ def attend_drift_simple(
     return v_t
 
 
-def stimflexons_support(t: np.ndarray, onset: float, coh: float) -> np.ndarray:
+def stimflex_support(
+    t: np.ndarray, onset: float, offset: float, coh: float
+) -> np.ndarray:
     """
     Construct a rectangular coherence timecourse, with discrete and
-    potentially variable onset of stimulus evidence.
+    potentially variable onsets and offsets of stimulus evidence.
 
     Arguments
     ---------
@@ -250,6 +253,8 @@ def stimflexons_support(t: np.ndarray, onset: float, coh: float) -> np.ndarray:
             Timepoints within trial.
         onset: float
             Onset time of the coherence pulse.
+        offset: float
+            Offset time of the coherence pulse.
         coh: float
             Coherence of the stimulus when 'on'.
     Returns
@@ -257,11 +262,11 @@ def stimflexons_support(t: np.ndarray, onset: float, coh: float) -> np.ndarray:
         np.ndarray: Array of coherence values, same length as t.
     """
     cohs = np.zeros_like(t)
-    cohs[t >= onset] = coh
+    cohs[(t >= onset) & (t <= offset)] = coh
     return cohs
 
 
-def ds_conflict_stimflexons_drift(
+def conflict_dsstimflex_drift(
     t: np.ndarray | None,
     tinit: float = 0,
     dinit: float = 0,
@@ -272,6 +277,7 @@ def ds_conflict_stimflexons_drift(
     dcoh: float = 1.0,
     tonset: float = 0,
     donset: float = 0,
+    rel_first: bool = True,
 ) -> np.ndarray:
     """Drift function for conflict task with stimuli with potentially variable onset.
 
@@ -298,17 +304,102 @@ def ds_conflict_stimflexons_drift(
             Onset time of the target stimulus coherence.
         donset: float
             Onset time of the distractor stimulus coherence.
+        rel_first: bool
+            If True, the first stimulus to appear (target or distractor)
+            is treated as appearing at time 0, and the other stimulus
+            is adjusted accordingly. If False, the onsets are treated
+            as absolute times.
     """
     if t is None:
         t = np.arange(0, 20, 0.1)
-    tcohs = stimflexons_support(t, tonset, tcoh)
-    dcohs = stimflexons_support(t, donset, dcoh)
+    if rel_first:
+        first = min(tonset, donset)
+        tonset -= first
+        donset -= first
+    offset = np.max(t)
+    tcohs = stimflex_support(t, tonset, offset, tcoh)
+    dcohs = stimflex_support(t, donset, offset, dcoh)
 
     w_t = ds_support_analytic(t=t, init_p=tinit, fix_point=tfixedp, slope=tslope)
     w_d = ds_support_analytic(t=t, init_p=dinit, fix_point=0, slope=dslope)
     v_t = (w_t * tcohs) + (w_d * dcohs)
 
     return v_t
+
+
+def conflict_stimflex_drift(
+    t: np.ndarray | None,
+    vt: float = 0,
+    vd: float = 0,
+    tcoh: float = 1.0,
+    dcoh: float = 1.0,
+    tonset: float = 0,
+    donset: float = 0,
+    toffset: float | None = None,
+    doffset: float | None = None,
+    rel_first: bool = False,
+    sum_drifts: bool = True,
+) -> np.ndarray:
+    """Drift function for conflict task with stimuli with potentially variable onset and duration.
+
+    Arguments:
+    ---------
+        t: np.ndarray
+            Timepoints at which to evaluate the drift.
+            Usually np.arange() of some sort.
+        tcoh: float
+            Coherence of the target stimulus when 'on'.
+        dcoh: float
+            Coherence of the distractor stimulus when 'on'.
+        vt: float
+            Static drift-rate of target stimulus, when 'on'.
+        vd: float
+            Static drift-rate of distractor stimulus, when 'on'.
+        tonset: float
+            Onset time of the target stimulus coherence.
+        donset: float
+            Onset time of the distractor stimulus coherence.
+        toffset, doffset: float or None
+            Duration of the stimulus coherence pulse. If None, the pulse
+            lasts until the end of the trial.
+        rel_first: bool
+            If True, the first stimulus to appear (target or distractor)
+            is treated as appearing at time 0, and the other stimulus
+            is adjusted accordingly. If False, the onsets are treated
+            as absolute times.
+        sum_drifts: bool
+            If True, the drift contributions from target and distractor
+            are summed to produce a single drift timecourse. If False,
+            a 2D array is returned with separate columns for target
+            and distractor drift timecourses.
+    Returns
+    -------
+        np.ndarray: Array of drift values, same length as t. If sum_drifts
+            is False, the array has shape (len(t), 2)
+    """
+    if t is None:
+        t = np.arange(0, 20, 0.1)
+    if rel_first:
+        first = min(tonset, donset)
+        tonset -= first
+        donset -= first
+    if toffset is None:
+        toffset = np.max(t)
+    if doffset is None:
+        doffset = np.max(t)
+    tcohs = stimflex_support(t, tonset, toffset, tcoh)
+    dcohs = stimflex_support(t, donset, doffset, dcoh)
+    if sum_drifts:
+        return vt * tcohs + vd * dcohs
+    else:
+        return np.column_stack((vt * tcohs, vd * dcohs))
+
+
+# Re-use drift fun but set different default args
+conflict_stimflexrel1_drift = partial(conflict_stimflex_drift, rel_first=True)
+conflict_stimflexrel1_dual_drift = partial(
+    conflict_stimflex_drift, rel_first=True, sum_drifts=False
+)
 
 
 # Type alias for drift functions
@@ -318,5 +409,6 @@ attend_drift: DriftFunction = attend_drift  # noqa: PLW0127
 constant: DriftFunction = constant  # noqa: PLW0127
 gamma_drift: DriftFunction = gamma_drift  # noqa: PLW0127
 ds_support_analytic: DriftFunction = ds_support_analytic  # noqa: PLW0127
-ds_conflict_drift: DriftFunction = ds_conflict_drift  # noqa: PLW0127
-ds_conflict_stimflexons_drift: DriftFunction = ds_conflict_stimflexons_drift  # noqa: PLW0127
+conflict_ds_drift: DriftFunction = conflict_ds_drift  # noqa: PLW0127
+conflict_dsstimflex_drift: DriftFunction = conflict_dsstimflex_drift  # noqa: PLW0127
+conflict_stimflex_drift: DriftFunction = conflict_stimflex_drift  # noqa: PLW0127
