@@ -277,7 +277,10 @@ def conflict_dsstimflex_drift(
     dcoh: float = 1.0,
     tonset: float = 0,
     donset: float = 0,
+    toffset: float | None = None,
+    doffset: float | None = None,
     rel_first: bool = True,
+    sum_drifts: bool = True
 ) -> np.ndarray:
     """Drift function for conflict task with stimuli with potentially variable onset.
 
@@ -316,15 +319,18 @@ def conflict_dsstimflex_drift(
         first = min(tonset, donset)
         tonset -= first
         donset -= first
-    offset = np.max(t)
-    tcohs = stimflex_support(t, tonset, offset, tcoh)
-    dcohs = stimflex_support(t, donset, offset, dcoh)
-
+    if toffset is None:
+        toffset = np.max(t)
+    if doffset is None:
+        doffset = np.max(t)
+    tcohs = stimflex_support(t, tonset, toffset, tcoh)
+    dcohs = stimflex_support(t, donset, doffset, dcoh)
     w_t = ds_support_analytic(t=t, init_p=tinit, fix_point=tfixedp, slope=tslope)
-    w_d = ds_support_analytic(t=t, init_p=dinit, fix_point=0, slope=dslope)
-    v_t = (w_t * tcohs) + (w_d * dcohs)
-
-    return v_t
+    w_d = ds_support_analytic(t=t, init_p=dinit, fix_point=0, slope=dslope)    
+    if sum_drifts:
+        return w_t * tcohs + w_d * dcohs
+    else:
+        return np.column_stack((w_t * tcohs, w_d * dcohs))
 
 
 def conflict_stimflex_drift(
@@ -400,6 +406,9 @@ conflict_stimflexrel1_drift = partial(conflict_stimflex_drift, rel_first=True)
 conflict_stimflexrel1_dual_drift = partial(
     conflict_stimflex_drift, rel_first=True, sum_drifts=False
 )
+conflict_dsstimflex_dual_drift = partial(
+    conflict_dsstimflex_drift, rel_first=False, sum_drifts=False
+)
 
 
 # Type alias for drift functions
@@ -412,3 +421,4 @@ ds_support_analytic: DriftFunction = ds_support_analytic  # noqa: PLW0127
 conflict_ds_drift: DriftFunction = conflict_ds_drift  # noqa: PLW0127
 conflict_dsstimflex_drift: DriftFunction = conflict_dsstimflex_drift  # noqa: PLW0127
 conflict_stimflex_drift: DriftFunction = conflict_stimflex_drift  # noqa: PLW0127
+conflict_dsstimflex_dual_drift: DriftFunction = conflict_dsstimflex_dual_drift  # noqa: PLW0127

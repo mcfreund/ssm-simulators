@@ -1050,8 +1050,6 @@ def ddm_flex_leak(np.ndarray[float, ndim = 1] v,
 # @cythonboundscheck(False)
 # @cythonwraparound(False)
 def ddm_flex_leak2(
-    np.ndarray[float, ndim = 1] vt,
-    np.ndarray[float, ndim = 1] vd,
     np.ndarray[float, ndim = 1] a,
     np.ndarray[float, ndim = 1] z,
     np.ndarray[float, ndim = 1] gt,
@@ -1223,9 +1221,7 @@ def ddm_flex_leak2(
                 rts_view[n, k, 0] = -999
     
     if return_option == 'full':
-        return {'rts': rts, 'choices': choices,  'metadata': {'vt': vt,
-                                                            'vd': vd,
-                                                            'a': a,
+        return {'rts': rts, 'choices': choices,  'metadata': {'a': a,
                                                             'z': z,
                                                             'gt': gt,
                                                             'gd': gd,
