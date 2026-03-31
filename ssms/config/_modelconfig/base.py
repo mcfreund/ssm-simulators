@@ -46,6 +46,22 @@ drift_config = {
         "fun": df.conflict_ds_drift,
         "params": ["tinit", "dinit", "tslope", "dslope", "tfixedp", "tcoh", "dcoh"],
     },
+    "conflict_dsstimflex_drift": {
+        "fun": df.conflict_dsstimflex_drift,
+        "params": [
+            "tinit",
+            "dinit",
+            "tslope",
+            "dslope",
+            "tfixedp",
+            "tcoh",
+            "dcoh",
+            "tonset",
+            "donset",
+            "toffset",
+            "doffset",
+        ],
+    },
     "conflict_stimflex_drift": {
         "fun": df.conflict_stimflex_drift,
         "params": [
