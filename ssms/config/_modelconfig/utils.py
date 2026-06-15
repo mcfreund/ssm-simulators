@@ -30,8 +30,10 @@ def _new_config(
     choices,
     n_particles,
     simulator,
+    weight_name=None,
+    weight_fun=None,
 ):
-    return {
+    config = {
         "name": name,
         "params": list(param_dict.keys()),
         "param_bounds": _get(param_dict, "bounds"),
@@ -46,3 +48,8 @@ def _new_config(
         "n_particles": n_particles,
         "simulator": simulator,
     }
+    # Only models with a decision-variable weight carry these keys
+    if weight_name is not None:
+        config["weight_name"] = weight_name
+        config["weight_fun"] = weight_fun
+    return config

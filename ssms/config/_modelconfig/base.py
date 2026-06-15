@@ -71,6 +71,8 @@ drift_config = {
             "dcoh",
             "tonset",
             "donset",
+            "toffset",
+            "doffset",
         ],
     },
     "conflict_stimflexrel1_drift": {
@@ -114,5 +116,13 @@ drift_config = {
     "attend_drift_simple": {
         "fun": df.attend_drift_simple,
         "params": ["ptarget", "pouter", "r", "sda"],
+    },
+}
+
+# Weight configurations (multiplicative, time-varying weight on the decision variable)
+weight_config = {
+    "weight_combined": {
+        "fun": df.weight_combined,
+        "params": ["wonset", "woffset", "wmin", "wtau"],
     },
 }

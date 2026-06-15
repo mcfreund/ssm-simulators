@@ -858,6 +858,206 @@ def ddm_flex(np.ndarray[float, ndim = 1] v,
         raise ValueError('return_option must be either "full" or "minimal"')
 
 
+# Simulate (rt, choice) tuples from: DDM WITH FLEXIBLE BOUNDARIES, FLEXIBLE DRIFT, AND DV WEIGHT ----
+# @cythonboundscheck(False)
+# @cythonwraparound(False)
+def ddm_flex_weight(np.ndarray[float, ndim = 1] v,
+             np.ndarray[float, ndim = 1] a,
+             np.ndarray[float, ndim = 1] z,
+             np.ndarray[float, ndim = 1] t,
+             np.ndarray[float, ndim = 1] deadline,
+             np.ndarray[float, ndim = 1] s, # noise sigma
+             float delta_t = 0.001,
+             float max_t = 20,
+             int n_samples = 20000,
+             int n_trials = 1,
+             boundary_fun = None, # function of t (and potentially other parameters) that takes in (t, *args)
+             drift_fun = None,
+             weight_fun = None, # function of t that returns a [0, 1] weight on the decision variable
+             boundary_multiplicative = True,
+             boundary_params = {},
+             drift_params = {},
+             weight_params = {},
+             random_state = None,
+             return_option = 'full',
+             smooth_unif  = False,
+             **kwargs):
+    """
+    Simulate reaction times and choices from a drift diffusion model with flexible boundaries,
+    flexible drift, and a multiplicative, time-varying weight on the decision variable.
+
+    Identical to ddm_flex, except that at each timestep the momentary evidence increment
+    (drift plus noise) is scaled by a weight function weight_fun(t) with range [0, 1]. This
+    gates how much signal and noise is integrated at each instant (windowed integration).
+
+    Args:
+        v (np.ndarray): Drift rate for each trial.
+        a (np.ndarray): Boundary separation for each trial.
+        z (np.ndarray): Starting point (between 0 and 1) for each trial.
+        t (np.ndarray): Non-decision time for each trial.
+        deadline (np.ndarray): Maximum reaction time allowed for each trial.
+        s (np.ndarray): Noise standard deviation for each trial.
+        delta_t (float): Time step size (default: 0.001).
+        max_t (float): Maximum simulation time (default: 20).
+        n_samples (int): Number of samples per trial (default: 20000).
+        n_trials (int): Number of trials to simulate (default: 1).
+        boundary_fun (callable): Function defining the decision boundary over time.
+        drift_fun (callable): Function defining the drift rate over time.
+        weight_fun (callable): Function defining the decision-variable weight over time.
+        boundary_multiplicative (bool): If True, boundary function is multiplicative; if False, additive.
+        boundary_params (dict): Parameters for the boundary function.
+        drift_params (dict): Parameters for the drift function.
+        weight_params (dict): Parameters for the weight function.
+        random_state (int or None): Seed for random number generator (default: None).
+        return_option (str): 'full' or 'minimal' return format (default: 'full').
+        smooth_unif (bool): Whether to apply uniform smoothing to reaction times (default: False).
+        **kwargs: Additional keyword arguments.
+
+    Returns:
+        dict: A dictionary containing simulated reaction times, choices, and metadata.
+              The exact contents depend on the return_option.
+
+    Raises:
+        ValueError: If return_option is neither 'full' nor 'minimal'.
+    """
+
+    set_seed(random_state)
+    # Param views:
+    cdef float[:] v_view = v
+    cdef float[:] a_view = a
+    cdef float[:] z_view = z
+    cdef float[:] t_view = t
+    cdef float[:] deadline_view = deadline
+    cdef float[:] s_view = s
+
+    traj = np.zeros((int(max_t / delta_t) + 1, 1), dtype = DTYPE)
+    traj[:, :] = -999
+    cdef float[:,:] traj_view = traj
+
+    rts = np.zeros((n_samples, n_trials, 1), dtype = DTYPE)
+    choices = np.zeros((n_samples, n_trials, 1), dtype = np.intc)
+
+    cdef float[:, :, :] rts_view = rts
+    cdef int[:, :, :] choices_view = choices
+
+    cdef float delta_t_sqrt = sqrt(delta_t) # correct scalar so we can use standard normal samples for the brownian motion
+
+    # Boundary storage for the upper bound
+    cdef int num_draws = int((max_t / delta_t) + 1)
+    t_s = np.arange(0, max_t + delta_t, delta_t).astype(DTYPE)
+    boundary = np.zeros(t_s.shape, dtype = DTYPE)
+    drift = np.zeros(t_s.shape, dtype = DTYPE)
+    weight = np.zeros(t_s.shape, dtype = DTYPE)
+    cdef float y, t_particle, smooth_u, deadline_tmp, sqrt_st
+    cdef Py_ssize_t n
+    cdef Py_ssize_t ix
+    cdef Py_ssize_t m = 0
+    cdef Py_ssize_t k
+    cdef float[:] gaussian_values = draw_gaussian(num_draws)
+    cdef float[:] boundary_view = boundary
+    cdef float[:] drift_view = drift
+    cdef float[:] weight_view = weight
+
+    # Loop over samples
+    for k in range(n_trials):
+        # Precompute boundary, drift, and weight evaluations
+
+        # Drift
+        drift_params_tmp = {key: drift_params[key][k] for key in drift_params.keys()}
+        drift[:] = np.add(v_view[k], drift_fun(t = t_s, **drift_params_tmp)).astype(DTYPE)
+
+        # Weight on the decision variable
+        weight_params_tmp = {key: weight_params[key][k] for key in weight_params.keys()}
+        weight[:] = weight_fun(t = t_s, **weight_params_tmp).astype(DTYPE)
+
+        # Boundary
+        boundary_params_tmp = {key: boundary_params[key][k] for key in boundary_params.keys()}
+        if boundary_multiplicative:
+            boundary[:] = np.multiply(a_view[k], boundary_fun(t = t_s, **boundary_params_tmp)).astype(DTYPE)
+        else:
+            boundary[:] = np.add(a_view[k], boundary_fun(t = t_s, **boundary_params_tmp)).astype(DTYPE)
+
+        deadline_tmp = min(max_t, deadline_view[k] - t_view[k])
+        sqrt_st = delta_t_sqrt * s_view[k]
+        for n in range(n_samples):
+            y = (-1) * boundary_view[0] + (z_view[k] * 2 * (boundary_view[0]))  # reset starting position
+            t_particle = 0.0 # reset time
+            ix = 0 # reset boundary index
+
+            # Can improve with less checks
+            if n == 0:
+                if k == 0:
+                    traj_view[0, 0] = y
+
+            # Random walker; weight gates the momentary evidence (drift + noise)
+            while (y >= (-1) * boundary_view[ix]) and (y <= boundary_view[ix]) and (t_particle <= deadline_tmp):
+                y += weight_view[ix] * ((drift_view[ix] * delta_t) + (sqrt_st * gaussian_values[m]))
+                t_particle += delta_t
+                ix += 1
+                m += 1
+
+                # Can improve with less checks
+                if n == 0:
+                    if k == 0:
+                        traj_view[ix, 0] = y
+
+                # Can improve with less checks
+                if m == num_draws:
+                    gaussian_values = draw_gaussian(num_draws)
+                    m = 0
+
+            if smooth_unif :
+                if t_particle == 0.0:
+                    smooth_u = random_uniform() * 0.5 * delta_t
+                elif t_particle < deadline_tmp:
+                    smooth_u = (0.5 - random_uniform()) * delta_t
+                else:
+                    smooth_u = 0.0
+            else:
+                smooth_u = 0.0
+
+            rts_view[n, k, 0] = t_particle + t_view[k] + smooth_u # Store rt
+            choices_view[n, k, 0] = sign(y) # Store choice
+
+            if (rts_view[n, k, 0] >= deadline_view[k]) | (deadline_view[k] <= 0):
+                rts_view[n, k, 0] = -999
+
+    if return_option == 'full':
+        return {'rts': rts, 'choices': choices,  'metadata': {'v': v,
+                                                            'a': a,
+                                                            'z': z,
+                                                            't': t,
+                                                            'deadline': deadline,
+                                                            's': s,
+                                                            **boundary_params,
+                                                            **drift_params,
+                                                            **weight_params,
+                                                            'delta_t': delta_t,
+                                                            'max_t': max_t,
+                                                            'n_samples': n_samples,
+                                                            'n_trials': n_trials,
+                                                            'simulator': 'ddm_flex_weight',
+                                                            'boundary_fun_type': boundary_fun.__name__,
+                                                            'drift_fun_type': drift_fun.__name__,
+                                                            'weight_fun_type': weight_fun.__name__,
+                                                            'possible_choices': [-1, 1],
+                                                            'trajectory': traj,
+                                                            'drift': drift,
+                                                            'weight': weight,
+                                                            'boundary': boundary}}
+    elif return_option == 'minimal':
+        return {'rts': rts, 'choices': choices,  'metadata': {'simulator': 'ddm_flex_weight',
+                                                             'possible_choices': [-1, 1],
+                                                             'boundary_fun_type': boundary_fun.__name__,
+                                                             'drift_fun_type': drift_fun.__name__,
+                                                             'weight_fun_type': weight_fun.__name__,
+                                                             'n_samples': n_samples,
+                                                             'n_trials': n_trials,
+                                                             }}
+    else:
+        raise ValueError('return_option must be either "full" or "minimal"')
+
+
 # Simulate (rt, choice) tuples from: DDM WITH FLEXIBLE BOUNDARIES, FLEXIBLE SLOPE, AND DECAY ----------
 # @cythonboundscheck(False)
 # @cythonwraparound(False)

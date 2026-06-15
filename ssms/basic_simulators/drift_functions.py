@@ -411,6 +411,89 @@ conflict_dsstimflex_dual_drift = partial(
 )
 
 
+def weight_window(
+    t: np.ndarray | None,
+    wonset: float = 0.0,
+    woffset: float = 1.0,
+    wmin: float = 0.0,
+    wtau: float = 0.1,
+) -> np.ndarray:
+    """Windowed integration weight: boxcar convolved with an exponential-decay kernel.
+
+    The boxcar equals 1 within the window [wonset, woffset] and wmin outside it. It is
+    smoothed by a causal exponential kernel exp(-tau/wtau) normalized to sum 1, so the
+    output is a weighted average of boxcar values and stays within [wmin, 1] ⊆ [0, 1].
+
+    Arguments
+    ---------
+        t: np.ndarray
+            Timepoints at which to evaluate the weight.
+        wonset: float
+            Onset time of the integration window.
+        woffset: float
+            Offset time of the integration window.
+        wmin: float
+            Weight value outside the window (>= 0).
+        wtau: float
+            Time constant of the exponential decay kernel.
+    Returns
+    -------
+        np.ndarray: Weight values in [0, 1], same length as t.
+    """
+    if t is None:
+        t = np.arange(0, 20, 0.1)
+    dt = t[1] - t[0]
+
+    boxcar = np.zeros_like(t)
+    boxcar[(t >= wonset) & (t <= woffset)] = 1.0 - wmin
+
+    # Causal exponential decay kernel, normalized to sum 1
+    kernel_t = np.arange(0, 5 * wtau + dt, dt)
+    kernel = np.exp(-kernel_t / wtau)
+    kernel /= kernel.sum()
+
+    # Convolve and truncate to the input length; clip guards float rounding
+    smoothed = np.clip(np.convolve(boxcar, kernel, mode="full")[: len(t)], 0.0, 1.0)
+    
+    # Bring max inside window to 1
+    max_smoothed = np.max(smoothed)
+    if max_smoothed > 0:
+        smoothed = (smoothed / max_smoothed) * (1.0 - wmin)
+    else:
+        smoothed += wmin
+    return smoothed
+
+
+def weight_combined(
+    t: np.ndarray | None,
+    wonset: float = 0.0,
+    woffset: float = 1.0,
+    wmin: float = 0.0,
+    wtau: float = 0.1,
+) -> np.ndarray:
+    """Combined decision-variable weight: default ramp times windowed integration.
+
+    Element-wise product of ds_support_analytic (init_p=0, fix_point=1, slope=2), which
+    ramps from 0 to 1, and weight_window. Both factors lie in [0, 1], so does the product.
+    The default ramp and windowed weights are special cases (set the other factor to 1).
+
+    Arguments
+    ---------
+        t: np.ndarray
+            Timepoints at which to evaluate the weight.
+        wonset, woffset, wmin, wtau: float
+            Parameters of the windowed integration factor (see weight_window).
+    Returns
+    -------
+        np.ndarray: Weight values in [0, 1], same length as t.
+    """
+    if t is None:
+        t = np.arange(0, 20, 0.1)
+    w_ramp = ds_support_analytic(t=t, init_p=1, fix_point=1, slope=1e-10)
+    w_window = weight_window(t, wonset=wonset, woffset=woffset, wmin=wmin, wtau=wtau)
+    return w_ramp * w_window
+
+
 # Type alias for drift functions
 DriftFunction = Callable[..., np.ndarray]
 
@@ -422,3 +505,5 @@ conflict_ds_drift: DriftFunction = conflict_ds_drift  # noqa: PLW0127
 conflict_dsstimflex_drift: DriftFunction = conflict_dsstimflex_drift  # noqa: PLW0127
 conflict_stimflex_drift: DriftFunction = conflict_stimflex_drift  # noqa: PLW0127
 conflict_dsstimflex_dual_drift: DriftFunction = conflict_dsstimflex_dual_drift  # noqa: PLW0127
+weight_window: DriftFunction = weight_window  # noqa: PLW0127
+weight_combined: DriftFunction = weight_combined  # noqa: PLW0127

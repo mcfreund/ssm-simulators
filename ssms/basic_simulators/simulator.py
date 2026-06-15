@@ -14,7 +14,7 @@ from numpy.random import default_rng
 
 from ssms.basic_simulators.theta_processor import SimpleThetaProcessor
 from ssms.config import model_config
-from ssms.config._modelconfig.base import boundary_config, drift_config
+from ssms.config._modelconfig.base import boundary_config, drift_config, weight_config
 
 # Constants
 from ssms.basic_simulators.constants import DEFAULT_SIM_PARAMS
@@ -302,6 +302,35 @@ def make_drift_dict(config: dict, theta: dict) -> dict:
     else:
         drift_dict = {}
     return drift_dict
+
+
+def make_weight_dict(config: dict, theta: dict) -> dict:
+    """
+    Create a dictionary containing decision-variable weight parameters and function.
+
+    Mirrors make_drift_dict: extracts weight-related parameters from theta based on the
+    weight configuration named in config, and retrieves the weight function. Returns an
+    empty dictionary for models without a weight (i.e. no "weight_name" in config).
+
+    Args:
+        config (dict): Model configuration, possibly including the weight name.
+        theta (dict): Parameter values, possibly including weight-related parameters.
+
+    Returns:
+        dict: {"weight_fun": callable, "weight_params": dict}, or {} if no weight.
+    """
+    if "weight_name" in config:
+        weight_name = config["weight_name"]
+        weight_params = {
+            param_name: value
+            for param_name, value in theta.items()
+            if param_name in weight_config[weight_name]["params"]
+        }
+        weight_fun = weight_config[weight_name]["fun"]
+        weight_dict = {"weight_fun": weight_fun, "weight_params": weight_params}
+    else:
+        weight_dict = {}
+    return weight_dict
 
 
 # TODO: Make useful as independent utility,
@@ -656,6 +685,8 @@ def simulator(
     boundary_dict = make_boundary_dict(model_config_local, theta)
     # Make drift dictionary
     drift_dict = make_drift_dict(model_config_local, theta)
+    # Make weight dictionary (empty for models without a decision-variable weight)
+    weight_dict = make_weight_dict(model_config_local, theta)
 
     # Check if parameters are valid
     validate_ssm_parameters(model, theta)
@@ -665,6 +696,7 @@ def simulator(
         **theta,
         **boundary_dict,
         **drift_dict,
+        **weight_dict,
         **sim_param_dict,
     )
 
