@@ -75,6 +75,22 @@ drift_config = {
             "doffset",
         ],
     },
+    "conflict_stimflexfilt_drift": {
+        "fun": df.conflict_stimflexfilt_drift,
+        "params": [
+            "vt",
+            "vd",
+            "tcoh",
+            "dcoh",
+            "tonset",
+            "donset",
+            "toffset",
+            "doffset",
+            "taurise",
+            "taufall"
+        ],
+    },
+
     "conflict_stimflexrel1_drift": {
         "fun": df.conflict_stimflexrel1_drift,
         "params": ["vt", "vd", "tcoh", "dcoh", "tonset", "donset"],
@@ -125,4 +141,11 @@ weight_config = {
         "fun": df.weight_combined,
         "params": ["wonset", "woffset", "wmin", "wtau"],
     },
+    "weight_window_ds1d": {
+        "fun": df.weight_window_ds1d,
+        "params": ["tonset", "donset", "toffset", "doffset", "taurise", "taufall", 
+                   "init", "asymp", "rate", 
+                   "kappa", "wmin"],
+    },
+
 }

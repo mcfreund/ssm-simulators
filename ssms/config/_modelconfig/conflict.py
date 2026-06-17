@@ -295,6 +295,38 @@ def get_conflict_stimflex_weight_config():
     )
 
 
+def get_conflict_stimflex_weightds1d_config():
+    return _new_config(
+        name="conflict_stimflex_weightds1d",
+        param_dict=dict(
+            a=_new_param(2.0, 0.3, 3.0),
+            z=_new_param(0.5, 0.1, 0.9),
+            t=_new_param(1.0, 1e-3, 2.0),
+            vt=_new_param(2.0, 0.0, 5.0),
+            vd=_new_param(2.0, 0.0, 5.0),
+            tcoh=_new_param(0.5, -1.0, 1.0),
+            dcoh=_new_param(-0.5, -1.0, 1.0),
+            tonset=_new_param(0.0, 0.0, 1.0),
+            donset=_new_param(0.0, 0.0, 1.0),
+            wmin=_new_param(0.5, 0.0, 1.0),
+            init=_new_param(0.5, 0, 1),
+            asymp=_new_param(1, 0, 1),
+            rate=_new_param(0.2, 1e-3, 2.0),
+            taurise=_new_param(0.025, 1e-3, 0.5),
+            taufall=_new_param(0.1, 1e-3, 0.5),
+            kappa=_new_param(1.0, 1e-3, 20)
+        ),
+        boundary_name="constant",
+        boundary=bf.constant,
+        drift_name="conflict_stimflexfilt_drift",
+        drift_fun=df.conflict_stimflexfilt_drift,
+        weight_name="weight_window_ds1d",
+        weight_fun=df.weight_window_ds1d,
+        choices=[-1, 1],
+        n_particles=1,
+        simulator=cssm.ddm_flex_weight,
+    )
+
 def get_conflict_dsstimflex_leak2_config():
     return _new_config(
         name="conflict_dsstimflex_leak2",

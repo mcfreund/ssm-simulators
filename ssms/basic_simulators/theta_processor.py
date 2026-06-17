@@ -61,6 +61,7 @@ class SimpleThetaProcessor(AbstractThetaProcessor):
         "conflict_stimflexrel1_leak",
         "conflict_stimflexrel1_leak2",
         "conflict_stimflex_weight",
+        "conflict_stimflex_weightds1d",
         "shrink_spot",
         "shrink_spot_simple",
         "shrink_spot_extended",
