@@ -601,14 +601,14 @@ def weight_window_ds1d(
     
     if t is None:
         t = np.arange(0, 20, 0.1)
+    weights = stimflexfilt_support(t, tonset, toffset, 1 - wmin, taurise, taufall) + wmin
+    return weights
     #target_state = asymp + (init - asymp) * np.exp(-t/rate)
     # target_state = (t > 0.4)*1
     # target_state[target_state == 0] = 1/3
     #weights = (t >= tonset) & (t <= toffset) * 1
-    weights = np.ones_like(t)
-    return weights
+    #weights = np.ones_like(t)
     #distractor_state = asymp - target_state
-    
     #target_stim = np.abs(stimflexfilt_support(t, tonset, toffset, np.abs(tcoh) - wmin, taurise, taufall)) + wmin
     #distractor_stim = np.abs(stimflexfilt_support(t, donset, doffset, np.abs(dcoh) - wmin, taurise, taufall)) + wmin
     
