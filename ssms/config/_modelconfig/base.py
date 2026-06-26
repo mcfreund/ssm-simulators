@@ -54,12 +54,15 @@ drift_config = {
             "tslope",
             "dslope",
             "tfixedp",
+            "dfixedp",
             "tcoh",
             "dcoh",
             "tonset",
             "donset",
             "toffset",
             "doffset",
+            "vtaurise",
+            "vtaufall",
         ],
     },
     "conflict_stimflex_drift": {
@@ -73,27 +76,13 @@ drift_config = {
             "donset",
             "toffset",
             "doffset",
+            "vtaurise",
+            "vtaufall",
         ],
     },
-    "conflict_stimflexfilt_drift": {
-        "fun": df.conflict_stimflexfilt_drift,
-        "params": [
-            "vt",
-            "vd",
-            "tcoh",
-            "dcoh",
-            "tonset",
-            "donset",
-            "toffset",
-            "doffset",
-            "taurise",
-            "taufall"
-        ],
-    },
-
     "conflict_stimflexrel1_drift": {
         "fun": df.conflict_stimflexrel1_drift,
-        "params": ["vt", "vd", "tcoh", "dcoh", "tonset", "donset"],
+        "params": ["vt", "vd", "tcoh", "dcoh", "tonset", "donset", "vtaurise", "vtaufall"],
     },
     "conflict_stimflexrel1_dual_drift": {
         "fun": df.conflict_stimflexrel1_dual_drift,
@@ -106,6 +95,8 @@ drift_config = {
             "donset",
             "toffset",
             "doffset",
+            "vtaurise",
+            "vtaufall",
         ],
     },
     "conflict_dsstimflex_dual_drift": {
@@ -116,12 +107,15 @@ drift_config = {
             "tslope",
             "dslope",
             "tfixedp",
+            "dfixedp",
             "tcoh",
             "dcoh",
             "tonset",
             "donset",
             "toffset",
             "doffset",
+            "vtaurise",
+            "vtaufall",
         ],
     },
 
@@ -137,15 +131,8 @@ drift_config = {
 
 # Weight configurations (multiplicative, time-varying weight on the decision variable)
 weight_config = {
-    "weight_combined": {
-        "fun": df.weight_combined,
-        "params": ["wonset", "woffset", "wmin", "wtau"],
+    "weight_window": {
+        "fun": df.weight_window,
+        "params": ["tonset", "toffset", "donset", "doffset", "wmin", "wtaurise", "wtaufall"],
     },
-    "weight_window_ds1d": {
-        "fun": df.weight_window_ds1d,
-        "params": ["tonset", "donset", "toffset", "doffset", "taurise", "taufall", 
-                   "init", "asymp", "rate", 
-                   "kappa", "wmin"],
-    },
-
 }
