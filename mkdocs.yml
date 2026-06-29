@@ -11,6 +11,7 @@ nav:
       - Installation: basic_tutorial/basic_tutorial.ipynb
   - Tutorials:
       - KDE Class: tutorials/kde_class.ipynb
+      - Adding a Conflict Model: tutorials/adding_conflict_models.md
   - API:
       - ssms: api/ssms.md
       - basic simulators: api/basic_simulators.md
