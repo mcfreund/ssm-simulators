@@ -39,14 +39,20 @@ just keeping four things in agreement:
 Mismatch #1↔#2 and a parameter silently never reaches the function. Mismatch
 #2↔#3 and you either pass an unused parameter or omit a required one.
 
-## The four layers
+## The five layers
 
 ```
 ssms/basic_simulators/drift_functions.py   (1) the math: drift / weight / support helpers
 ssms/config/_modelconfig/base.py           (2) registry: drift_config / weight_config / boundary_config
 ssms/config/_modelconfig/conflict.py       (3) the model: param_dict + which fns + which C simulator
 ssms/config/_modelconfig/__init__.py       (4) registration: import + add to get_model_config()
+ssms/basic_simulators/theta_processor.py   (5) dynamic-drift opt-in: models_dynamic_drift list
 ```
+
+Layer 5 is easy to miss and produces a confusing failure (see
+[Layer 5](#layer-5--opt-into-dynamic-drift-theta_processorpy) below): **every**
+conflict model here computes its drift from a drift function rather than a scalar
+`v`, so it must be opted into that behavior by name.
 
 ### Layer 1 — drift / weight functions (`drift_functions.py`)
 
@@ -228,6 +234,40 @@ The module-level validation block at the bottom of `__init__.py` runs
 `get_model_config()` on import, so a misnamed parameter or a builder that raises
 will fail loudly at import time with the offending model name.
 
+### Layer 5 — opt into dynamic drift (`theta_processor.py`)
+
+Conflict models don't have a scalar drift rate `v`; their drift is produced by the
+drift function. The simulator still needs a `v` entry in `theta` to satisfy the C
+integrator's positional `v` argument, so `SimpleThetaProcessor` injects a
+placeholder `v = 0` per trial — **but only for models listed in
+`models_dynamic_drift`**:
+
+```python
+# theta_processor.py
+models_dynamic_drift = [
+    "conflict_ds",
+    "conflict_dsstimflex_weight",
+    "conflict_dsstimflex_dsweight",   # <- every new dynamic-drift conflict model must be added
+    ...
+]
+...
+if model in self.models_dynamic_drift:
+    theta["v"] = np.tile(np.array([0], dtype=np.float32), n_trials)
+```
+
+If you forget this step, the four config layers all validate, `get_model_config()`
+imports cleanly, and the model looks correct — but the first `simulator(...)` call
+dies deep in Cython with a misleading message, because `theta` has no `v` (nor any
+other positional arg) to pass:
+
+```
+TypeError: ddm_flex_weight() takes at least 6 positional arguments (0 given)
+```
+
+Add your model name (and any boundary variants) to `models_dynamic_drift`. This is
+the one registration that isn't covered by the import-time validation, so it won't
+warn you — it only surfaces at simulation time.
+
 ## Parameter-naming rules
 
 `validation.py` checks every parameter name against
@@ -252,6 +292,9 @@ Duplicates or invalid names raise at import.
 - [ ] Angle/other-boundary sibling if needed (reuse the param_dict, add the
       boundary param, swap `boundary_name`/`boundary`).
 - [ ] Import + `get_model_config()` dict entry in `__init__.py`.
+- [ ] **Model name added to `models_dynamic_drift` in `theta_processor.py`**
+      (dynamic-drift models only — i.e. all conflict models here). Skipping this
+      passes every config check but crashes at simulation time.
 - [ ] Names pass the alphanumeric validation rule.
 
 ## Verify (cheap, no training)
@@ -272,5 +315,7 @@ print(out["rts"].shape, out["choices"].shape)
 ```
 
 If `get_model_config()` imports without raising and the tiny simulation returns
-`rts`/`choices` with no missing-parameter error, the four layers are in
-agreement.
+`rts`/`choices` with no error, all five layers are in agreement. Note that the
+import check alone is **not** sufficient: it passes even when Layer 5 (the
+`models_dynamic_drift` opt-in) is missing — only the simulation step catches that,
+which is why running the tiny simulation matters.

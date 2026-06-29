@@ -135,4 +135,9 @@ weight_config = {
         "fun": df.weight_window,
         "params": ["tonset", "toffset", "donset", "doffset", "wmin", "wtaurise", "wtaufall"],
     },
+    "weight_window_ds": {
+        "fun": df.weight_window_ds,
+        "params": ["tonset", "toffset", "wmin", "wtaurise", "wtaufall", "winit", "wslope"],
+    },
+
 }

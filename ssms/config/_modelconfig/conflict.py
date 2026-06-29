@@ -136,6 +136,24 @@ def _dsstimflex_weight_param_dict():
     )
 
 
+def get_conflict_dsstimflex_dsweight_config():
+    return _new_config(
+        name="conflict_dsstimflex_dsweight",
+        param_dict=_dsstimflex_weight_param_dict() | dict(
+            winit=_new_param(0.0, 0.0, 1.0),
+            wslope=_new_param(0.15, 0.01, 1.0)),
+        boundary_name="constant",
+        boundary=bf.constant,
+        drift_name="conflict_dsstimflex_drift",
+        drift_fun=df.conflict_dsstimflex_drift,
+        weight_name="weight_window_ds",
+        weight_fun=df.weight_window_ds,
+        choices=[-1, 1],
+        n_particles=1,
+        simulator=cssm.ddm_flex_weight,
+    )
+
+
 def get_conflict_dsstimflex_weight_config():
     return _new_config(
         name="conflict_dsstimflex_weight",

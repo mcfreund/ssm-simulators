@@ -456,6 +456,25 @@ def weight_window(
     return stimflex_support(t, onset, offset, 1 - wmin, wtaurise, wtaufall) + wmin
 
 
+def weight_window_ds(
+    t: np.ndarray | None,
+    tonset: float = 0.0,
+    toffset: float = 1.0,
+    wmin: float = 0.0,
+    wtaurise: float = 0.05,
+    wtaufall: float = 0.1,
+    winit: float = 0,
+    wslope: float = 0.2
+) -> np.ndarray:
+    if t is None:
+        t = np.arange(0, 20, 0.1)
+    ## Stimulus-driven weight:
+    stim_weight = stimflex_support(t, tonset, toffset, 1 - wmin, wtaurise, wtaufall)
+    ## Cue-locked weight (scale amplitude of stim-driven):
+    cue_weight = ds_support_analytic(t=t, init_p=winit, fix_point=1, slope=wslope)
+    return stim_weight * cue_weight + wmin
+
+
 # Type alias for drift functions
 DriftFunction = Callable[..., np.ndarray]
 
@@ -468,3 +487,4 @@ conflict_dsstimflex_drift: DriftFunction = conflict_dsstimflex_drift  # noqa: PL
 conflict_stimflex_drift: DriftFunction = conflict_stimflex_drift  # noqa: PLW0127
 conflict_dsstimflex_dual_drift: DriftFunction = conflict_dsstimflex_dual_drift  # noqa: PLW0127
 weight_window: DriftFunction = weight_window  # noqa: PLW0127
+weight_window_ds: DriftFunction = weight_window_ds  # noqa: PLW0127

@@ -12,6 +12,7 @@ from .conflict import (
     get_conflict_stimflexrel1_leak2_config,
     get_conflict_dsstimflex_weight_config,
     get_conflict_dsstimflex_weight_angle_config,
+    get_conflict_dsstimflex_dsweight_config,
 )
 from .full_ddm import (
     get_full_ddm_config,
@@ -199,6 +200,7 @@ def get_model_config():
         "conflict_stimflexrel1_leak2": get_conflict_stimflexrel1_leak2_config(),
         "conflict_dsstimflex_weight": get_conflict_dsstimflex_weight_config(),
         "conflict_dsstimflex_weight_angle": get_conflict_dsstimflex_weight_angle_config(),
+        "conflict_dsstimflex_dsweight": get_conflict_dsstimflex_dsweight_config(),
         "ornstein": get_ornstein_config(),
         "ornstein_angle": get_ornstein_angle_config(),
         "race_2": get_race_2_config(),

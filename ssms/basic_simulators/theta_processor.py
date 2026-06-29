@@ -54,6 +54,7 @@ class SimpleThetaProcessor(AbstractThetaProcessor):
         "conflict_ds_angle",
         "conflict_dsstimflex_weight",
         "conflict_dsstimflex_weight_angle",
+        "conflict_dsstimflex_dsweight",
         "conflict_dsstimflex_leak2",
         "conflict_stimflexrel1_leak",
         "conflict_stimflexrel1_leak2",
