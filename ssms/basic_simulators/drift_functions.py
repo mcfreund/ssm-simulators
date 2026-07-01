@@ -6,6 +6,7 @@ from functools import partial
 
 import numpy as np
 from scipy.stats import norm
+from scipy.special import expit, softmax
 
 
 # TODO: #81 B008 Do not perform function call `np.arange` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable  # noqa: B008, FIX002
@@ -443,7 +444,8 @@ def weight_window(
     wmin: float = 0.0,
     wtaurise: float = 0.05,
     wtaufall: float = 0.1,
-    onoff_method: str = "target"
+    onoff_method: str = "target",
+    rng=None,  # deterministic; accepted so cssm can inject uniformly
 ) -> np.ndarray:
     if t is None:
         t = np.arange(0, 20, 0.1)
@@ -464,7 +466,8 @@ def weight_window_ds(
     wtaurise: float = 0.05,
     wtaufall: float = 0.1,
     winit: float = 0,
-    wslope: float = 0.2
+    wslope: float = 0.2,
+    rng=None,  # deterministic; accepted so cssm can inject uniformly
 ) -> np.ndarray:
     if t is None:
         t = np.arange(0, 20, 0.1)
@@ -474,6 +477,76 @@ def weight_window_ds(
     cue_weight = ds_support_analytic(t=t, init_p=winit, fix_point=1, slope=wslope)
     return stim_weight * cue_weight + wmin
 
+
+def sample_hazard_onset(t, rate, rng):
+    """Sample the gate opening time from a time-varying hazard (inf if it never opens)."""
+    dt = t[1] - t[0]
+    cum_hazard = np.cumsum(rate) * dt
+    idx = np.searchsorted(cum_hazard, rng.exponential())
+    return t[idx] if idx < t.shape[0] else np.inf
+
+
+def prob_gate(
+    t: np.ndarray | None,
+    tonset: float = 0.0,
+    toffset: float = 1.0,
+    tcoh: float = 1.0,
+    donset: float = 0.0,
+    doffset: float = 1.0,
+    dcoh: float = 1.0,
+    vtaurise: float = 0.05,
+    vtaufall: float = 0.1,
+    wbaseline: float = 0,
+    wtarget: float = 1,
+    wdistractor: float = 1,
+    rng=None,  # injected by cssm; unseeded fallback only when called standalone
+) -> np.ndarray:
+    if t is None:
+        t = np.arange(0, 20, 0.1)
+    target_energy = stimflex_support(t, tonset, toffset, np.abs(tcoh), vtaurise, vtaufall)
+    distractor_energy = stimflex_support(t, donset, doffset, np.abs(dcoh), vtaurise, vtaufall)
+    rate = np.exp(target_energy * wtarget + distractor_energy * wdistractor + wbaseline)
+    if rng is None:
+        rng = np.random.default_rng()
+    return (t > sample_hazard_onset(t, rate, rng)).astype(float)
+
+
+def parametric_weight(
+    t: np.ndarray | None,
+    tonset: float = 0.0,
+    donset: float = 0.0,
+    tcoh: float = 1.0,
+    dcoh: float = 1.0,
+    vtaurise: float = 0.05,
+    wbaseline: float = 0,
+    wtarget: float = 1,
+    wdistractor: float = 1,
+    rng=None,  # deterministic; accepted so cssm can inject uniformly
+) -> np.ndarray:
+    if t is None:
+        t = np.arange(0, 20, 0.1)
+    target_energy = stimflex_support(t, tonset, np.max(t), np.abs(tcoh), vtaurise, 1e12)
+    distractor_energy = stimflex_support(t, donset, np.max(t), np.abs(dcoh), vtaurise, 1e12)
+    return expit(target_energy * wtarget + distractor_energy * wdistractor + wbaseline)
+
+
+def parametric_mixture(
+    t: np.ndarray | None,
+    tonset: float = 0.0,
+    donset: float = 0.0,
+    wmin: float = 0.0,
+    wtaurise: float = 0.05,
+    wtarget: float = 0,
+    wdistractor: float = 0,
+    rng=None,  # injected by cssm; unseeded fallback only when called standalone
+) -> np.ndarray:
+    if t is None:
+        t = np.arange(0, 20, 0.005)
+    if rng is None:
+        rng = np.random.default_rng()
+    onset = rng.choice([min(tonset, donset), tonset, donset], p = softmax([0, wtarget, wdistractor]))
+    return stimflex_support(t, onset, t.max(), 1 - wmin, wtaurise, 1e12) + wmin
+    
 
 # Type alias for drift functions
 DriftFunction = Callable[..., np.ndarray]
@@ -488,3 +561,6 @@ conflict_stimflex_drift: DriftFunction = conflict_stimflex_drift  # noqa: PLW012
 conflict_dsstimflex_dual_drift: DriftFunction = conflict_dsstimflex_dual_drift  # noqa: PLW0127
 weight_window: DriftFunction = weight_window  # noqa: PLW0127
 weight_window_ds: DriftFunction = weight_window_ds  # noqa: PLW0127
+prob_gate: DriftFunction = prob_gate  # noqa: PLW0127
+parametric_weight: DriftFunction = parametric_weight  # noqa: PLW0127
+parametric_mixture: DriftFunction = parametric_mixture  # noqa: PLW0127

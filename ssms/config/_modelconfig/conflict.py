@@ -154,6 +154,112 @@ def get_conflict_dsstimflex_dsweight_config():
     )
 
 
+def get_conflict_dsstimflex_probgate_config():
+    return _new_config(
+        name="conflict_dsstimflex_probgate",
+        param_dict=dict(
+            a=_new_param(2.0, 0.3, 3.0),
+            z=_new_param(0.5, 0.1, 0.9),
+            t=_new_param(1.0, 1e-3, 2.0),
+            tinit=_new_param(2.0, 0.0, 5.0),
+            dinit=_new_param(2.0, 0.0, 5.0),
+            tslope=_new_param(2.0, 0.01, 5.0),
+            dslope=_new_param(2.0, 0.01, 5.0),
+            tfixedp=_new_param(3.0, 0.0, 5.0),
+            dfixedp=_new_param(0.0, 0.0, 5.0),
+            tcoh=_new_param(0.5, -1.0, 1.0),
+            dcoh=_new_param(-0.5, -1.0, 1.0),
+            tonset=_new_param(0.0, 0.0, 1.0),
+            donset=_new_param(0.0, 0.0, 1.0),
+            vtaurise=_new_param(0.05, 1e-3, 0.5),
+            vtaufall=_new_param(0.1, 1e-3, 0.5),
+            wbaseline=_new_param(0, -10, 10),
+            wtarget=_new_param(0, -5, 5),
+            wdistractor=_new_param(0, -5, 5),
+        ),
+        boundary_name="constant",
+        boundary=bf.constant,
+        drift_name="conflict_dsstimflex_drift",
+        drift_fun=df.conflict_dsstimflex_drift,
+        weight_name="prob_gate",
+        weight_fun=df.prob_gate,
+        choices=[-1, 1],
+        n_particles=1,
+        simulator=cssm.ddm_flex_weight,
+    )
+
+
+def get_conflict_dsstimflex_parweight_config():
+    return _new_config(
+        name="conflict_dsstimflex_parweight",
+        param_dict=dict(
+            a=_new_param(2.0, 0.3, 3.0),
+            z=_new_param(0.5, 0.1, 0.9),
+            t=_new_param(1.0, 1e-3, 2.0),
+            tinit=_new_param(2.0, 0.0, 5.0),
+            dinit=_new_param(2.0, 0.0, 5.0),
+            tslope=_new_param(2.0, 0.01, 5.0),
+            dslope=_new_param(2.0, 0.01, 5.0),
+            tfixedp=_new_param(3.0, 0.0, 5.0),
+            dfixedp=_new_param(0.0, 0.0, 5.0),
+            tcoh=_new_param(0.5, -1.0, 1.0),
+            dcoh=_new_param(-0.5, -1.0, 1.0),
+            tonset=_new_param(0.0, 0.0, 1.0),
+            donset=_new_param(0.0, 0.0, 1.0),
+            vtaurise=_new_param(0.05, 1e-3, 0.5),
+            vtaufall=_new_param(0.1, 1e-3, 0.5),
+            wbaseline=_new_param(0, -10, 10),
+            wtarget=_new_param(0, -5, 5),
+            wdistractor=_new_param(0, -5, 5),
+        ),
+        boundary_name="constant",
+        boundary=bf.constant,
+        drift_name="conflict_dsstimflex_drift",
+        drift_fun=df.conflict_dsstimflex_drift,
+        weight_name="parametric_weight",
+        weight_fun=df.parametric_weight,
+        choices=[-1, 1],
+        n_particles=1,
+        simulator=cssm.ddm_flex_weight,
+    )
+
+
+def get_conflict_dsstimflex_parmix_config():
+    return _new_config(
+        name="conflict_dsstimflex_parmix",
+        param_dict=dict(
+            a=_new_param(2.0, 0.3, 3.0),
+            z=_new_param(0.5, 0.1, 0.9),
+            t=_new_param(1.0, 1e-3, 2.0),
+            tinit=_new_param(2.0, 0.0, 5.0),
+            dinit=_new_param(2.0, 0.0, 5.0),
+            tslope=_new_param(2.0, 0.01, 5.0),
+            dslope=_new_param(2.0, 0.01, 5.0),
+            tfixedp=_new_param(3.0, 0.0, 5.0),
+            dfixedp=_new_param(0.0, 0.0, 5.0),
+            tcoh=_new_param(0.5, -1.0, 1.0),
+            dcoh=_new_param(-0.5, -1.0, 1.0),
+            tonset=_new_param(0.0, 0.0, 1.0),
+            donset=_new_param(0.0, 0.0, 1.0),
+            vtaurise=_new_param(0.05, 1e-3, 0.5),
+            vtaufall=_new_param(0.1, 1e-3, 0.5),
+            wmin=_new_param(0.0, 0.0, 1.0),
+            wtaurise=_new_param(0.05, 1e-3, 0.5),
+            wtarget=_new_param(0, -10, 10),
+            wdistractor=_new_param(0, -10, 10),
+        ),
+        boundary_name="constant",
+        boundary=bf.constant,
+        drift_name="conflict_dsstimflex_drift",
+        drift_fun=df.conflict_dsstimflex_drift,
+        weight_name="parametric_mixture",
+        weight_fun=df.parametric_mixture,
+        choices=[-1, 1],
+        n_particles=1,
+        simulator=cssm.ddm_flex_weight,
+    )
+    
+
 def get_conflict_dsstimflex_weight_config():
     return _new_config(
         name="conflict_dsstimflex_weight",

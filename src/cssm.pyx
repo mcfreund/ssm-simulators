@@ -958,6 +958,11 @@ def ddm_flex_weight(np.ndarray[float, ndim = 1] v,
     cdef float[:] drift_view = drift
     cdef float[:] weight_view = weight
 
+    # Numpy generator seeded from the same master seed (set_seed above), so the
+    # Python weight callback draws reproducibly and in step with the C diffusion
+    # noise. Consumed once per trial across the loop below.
+    weight_rng = np.random.default_rng(random_state)
+
     # Loop over samples
     for k in range(n_trials):
         # Precompute boundary, drift, and weight evaluations
@@ -968,7 +973,7 @@ def ddm_flex_weight(np.ndarray[float, ndim = 1] v,
 
         # Weight on the decision variable
         weight_params_tmp = {key: weight_params[key][k] for key in weight_params.keys()}
-        weight[:] = weight_fun(t = t_s, **weight_params_tmp).astype(DTYPE)
+        weight[:] = weight_fun(t = t_s, rng = weight_rng, **weight_params_tmp).astype(DTYPE)
 
         # Boundary
         boundary_params_tmp = {key: boundary_params[key][k] for key in boundary_params.keys()}

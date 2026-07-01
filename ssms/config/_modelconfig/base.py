@@ -139,5 +139,17 @@ weight_config = {
         "fun": df.weight_window_ds,
         "params": ["tonset", "toffset", "wmin", "wtaurise", "wtaufall", "winit", "wslope"],
     },
+    "prob_gate": {
+        "fun": df.prob_gate,
+        "params": ["tonset", "toffset", "tcoh", "donset", "doffset", "dcoh", "vtaurise", "vtaufall", "wbaseline", "wtarget", "wdistractor"],
+    },
+    "parametric_weight": {
+        "fun": df.parametric_weight,
+        "params": ["tonset", "tcoh", "donset", "dcoh", "vtaurise", "wbaseline", "wtarget", "wdistractor"],
+    },
+    "parametric_mixture": {
+        "fun": df.parametric_mixture,
+        "params": ["tonset", "donset", "wmin", "wtaurise", "wtarget", "wdistractor"],
+    },
 
 }
