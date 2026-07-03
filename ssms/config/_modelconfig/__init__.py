@@ -16,6 +16,7 @@ from .conflict import (
     get_conflict_dsstimflex_probgate_config,
     get_conflict_dsstimflex_parweight_config,
     get_conflict_dsstimflex_parmix_config,
+    get_conflict_dsstimflex_parmixdet_config,
 )
 from .full_ddm import (
     get_full_ddm_config,
@@ -207,6 +208,7 @@ def get_model_config():
         "conflict_dsstimflex_probgate": get_conflict_dsstimflex_probgate_config(),
         "conflict_dsstimflex_parweight": get_conflict_dsstimflex_parweight_config(),
         "conflict_dsstimflex_parmix": get_conflict_dsstimflex_parmix_config(),
+        "conflict_dsstimflex_parmixdet": get_conflict_dsstimflex_parmixdet_config(),
         "ornstein": get_ornstein_config(),
         "ornstein_angle": get_ornstein_angle_config(),
         "race_2": get_race_2_config(),

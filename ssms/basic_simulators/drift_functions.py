@@ -546,7 +546,36 @@ def parametric_mixture(
         rng = np.random.default_rng()
     onset = rng.choice([min(tonset, donset), tonset, donset], p = softmax([0, wtarget, wdistractor]))
     return stimflex_support(t, onset, t.max(), 1 - wmin, wtaurise, 1e12) + wmin
-    
+
+
+def parametric_mixture_det(
+    t: np.ndarray | None,
+    tonset: float = 0.0,
+    donset: float = 0.0,
+    wmin: float = 0.0,
+    wtaurise: float = 0.05,
+    wtarget: float = 0,
+    wdistractor: float = 0,
+    rng=None,  # accepted for a uniform cssm signature; deterministic, so unused
+) -> np.ndarray:
+    """Deterministic counterpart to ``parametric_mixture``.
+
+    Instead of sampling a single onset per trial, return the softmax-weighted *average*
+    of the three candidate weight windows (baseline=earlier stimulus, target onset,
+    distractor onset), with mixing weights ``softmax([0, wtarget, wdistractor])``. Every
+    trial with the same parameters/design yields the identical weight timecourse, which
+    removes the trial-level mixture noise and sharpens the likelihood -- making
+    ``wtarget``/``wdistractor`` more identifiable than the stochastic version.
+    """
+    if t is None:
+        t = np.arange(0, 20, 0.005)
+    onsets = (min(tonset, donset), tonset, donset)
+    p = softmax([0.0, wtarget, wdistractor])
+    windows = np.stack(
+        [stimflex_support(t, onset, t.max(), 1 - wmin, wtaurise, 1e12) for onset in onsets])
+    # sum_k p_k * (stim_k + wmin) = (sum_k p_k stim_k) + wmin, since sum_k p_k = 1.
+    return wmin + p @ windows
+
 
 # Type alias for drift functions
 DriftFunction = Callable[..., np.ndarray]
@@ -564,3 +593,4 @@ weight_window_ds: DriftFunction = weight_window_ds  # noqa: PLW0127
 prob_gate: DriftFunction = prob_gate  # noqa: PLW0127
 parametric_weight: DriftFunction = parametric_weight  # noqa: PLW0127
 parametric_mixture: DriftFunction = parametric_mixture  # noqa: PLW0127
+parametric_mixture_det: DriftFunction = parametric_mixture_det  # noqa: PLW0127

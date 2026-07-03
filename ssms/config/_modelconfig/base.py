@@ -151,5 +151,9 @@ weight_config = {
         "fun": df.parametric_mixture,
         "params": ["tonset", "donset", "wmin", "wtaurise", "wtarget", "wdistractor"],
     },
+    "parametric_mixture_det": {
+        "fun": df.parametric_mixture_det,
+        "params": ["tonset", "donset", "wmin", "wtaurise", "wtarget", "wdistractor"],
+    },
 
 }

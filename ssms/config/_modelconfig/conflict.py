@@ -258,7 +258,45 @@ def get_conflict_dsstimflex_parmix_config():
         n_particles=1,
         simulator=cssm.ddm_flex_weight,
     )
-    
+
+
+def get_conflict_dsstimflex_parmixdet_config():
+    """Deterministic variant of parmix: softmax-weighted average of the candidate
+    weight windows instead of a per-trial random draw (see df.parametric_mixture_det)."""
+    return _new_config(
+        name="conflict_dsstimflex_parmixdet",
+        param_dict=dict(
+            a=_new_param(2.0, 0.3, 3.0),
+            z=_new_param(0.5, 0.1, 0.9),
+            t=_new_param(1.0, 1e-3, 2.0),
+            tinit=_new_param(2.0, 0.0, 5.0),
+            dinit=_new_param(2.0, 0.0, 5.0),
+            tslope=_new_param(2.0, 0.01, 5.0),
+            dslope=_new_param(2.0, 0.01, 5.0),
+            tfixedp=_new_param(3.0, 0.0, 5.0),
+            dfixedp=_new_param(0.0, 0.0, 5.0),
+            tcoh=_new_param(0.5, -1.0, 1.0),
+            dcoh=_new_param(-0.5, -1.0, 1.0),
+            tonset=_new_param(0.0, 0.0, 1.0),
+            donset=_new_param(0.0, 0.0, 1.0),
+            vtaurise=_new_param(0.05, 1e-3, 0.5),
+            vtaufall=_new_param(0.1, 1e-3, 0.5),
+            wmin=_new_param(0.0, 0.0, 1.0),
+            wtaurise=_new_param(0.05, 1e-3, 0.5),
+            wtarget=_new_param(0, -10, 10),
+            wdistractor=_new_param(0, -10, 10),
+        ),
+        boundary_name="constant",
+        boundary=bf.constant,
+        drift_name="conflict_dsstimflex_drift",
+        drift_fun=df.conflict_dsstimflex_drift,
+        weight_name="parametric_mixture_det",
+        weight_fun=df.parametric_mixture_det,
+        choices=[-1, 1],
+        n_particles=1,
+        simulator=cssm.ddm_flex_weight,
+    )
+
 
 def get_conflict_dsstimflex_weight_config():
     return _new_config(
