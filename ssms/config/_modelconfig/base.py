@@ -65,6 +65,24 @@ drift_config = {
             "vtaufall",
         ],
     },
+    "conflict_dsstimflexlin_drift": {
+        "fun": df.conflict_dsstimflexlin_drift,
+        "params": [
+            "tlevel",
+            "dlevel",
+            "ttilt",
+            "dtilt",
+            "tcoh",
+            "dcoh",
+            "tonset",
+            "donset",
+            "toffset",
+            "doffset",
+            "maxstimoffset",
+            "vtaurise",
+            "vtaufall",
+        ],
+    },
     "conflict_stimflex_drift": {
         "fun": df.conflict_stimflex_drift,
         "params": [

@@ -314,6 +314,52 @@ def get_conflict_dsstimflex_weight_config():
     )
 
 
+def _dsstimflexlin_weight_param_dict():
+    """Shared param_dict for conflict_dsstimflexlin_weight: linear, cue-locked within-trial
+    drift dynamics in (level, tilt). ``level`` is the drift at the reference midpoint
+    (``maxstimoffset/2``) = onset-marginal mean drift; ``tilt`` in [-1, 1] is the
+    fractional slope of the cue-locked line (``level*(1-tilt)`` at the cue to
+    ``level*(1+tilt)`` at ``maxstimoffset``). ``tilt = 0`` is a static boxcar drift.
+    Tilt bounds are symmetric; |tilt| <= 1 keeps the drift non-negative over the
+    expressible span (a prior/bounds concern, not enforced in the drift function).
+    ``maxstimoffset`` is a supplied design constant (not inferred)."""
+    return dict(
+        a=_new_param(2.0, 0.3, 3.0),
+        z=_new_param(0.5, 0.1, 0.9),
+        t=_new_param(1.0, 1e-3, 2.0),
+        tlevel=_new_param(2.0, 0.0, 20.0),
+        dlevel=_new_param(2.0, 0.0, 20.0),
+        ttilt=_new_param(0.0, -1.0, 1.0),
+        dtilt=_new_param(0.0, -1.0, 1.0),
+        tcoh=_new_param(0.5, -1.0, 1.0),
+        dcoh=_new_param(-0.5, -1.0, 1.0),
+        tonset=_new_param(0.0, 0.0, 1.0),
+        donset=_new_param(0.0, 0.0, 1.0),
+        maxstimoffset=_new_param(1.0 + 16 / 60, 0.0, 20.0),
+        vtaurise=_new_param(0.05, 1e-3, 0.5),
+        vtaufall=_new_param(0.1, 1e-3, 0.5),
+        wmin=_new_param(0.5, 0.0, 1.0),
+        wtaurise=_new_param(0.05, 1e-3, 0.5),
+        wtaufall=_new_param(0.1, 1e-3, 0.5),
+    )
+
+
+def get_conflict_dsstimflexlin_weight_config():
+    return _new_config(
+        name="conflict_dsstimflexlin_weight",
+        param_dict=_dsstimflexlin_weight_param_dict(),
+        boundary_name="constant",
+        boundary=bf.constant,
+        drift_name="conflict_dsstimflexlin_drift",
+        drift_fun=df.conflict_dsstimflexlin_drift,
+        weight_name="weight_window",
+        weight_fun=df.weight_window,
+        choices=[-1, 1],
+        n_particles=1,
+        simulator=cssm.ddm_flex_weight,
+    )
+
+
 def get_conflict_dsstimflex_weight_angle_config():
     return _new_config(
         name="conflict_dsstimflex_weight_angle",
