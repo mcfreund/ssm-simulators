@@ -98,34 +98,11 @@ drift_config = {
             "vtaufall",
         ],
     },
-    "conflict_stimflexrel1_drift": {
-        "fun": df.conflict_stimflexrel1_drift,
-        "params": ["vt", "vd", "tcoh", "dcoh", "tonset", "donset", "vtaurise", "vtaufall"],
-    },
-    "conflict_stimflexrel1_dual_drift": {
-        "fun": df.conflict_stimflexrel1_dual_drift,
+    "conflict_stimflex_dual_drift": {
+        "fun": df.conflict_stimflex_dual_drift,
         "params": [
             "vt",
             "vd",
-            "tcoh",
-            "dcoh",
-            "tonset",
-            "donset",
-            "toffset",
-            "doffset",
-            "vtaurise",
-            "vtaufall",
-        ],
-    },
-    "conflict_dsstimflex_dual_drift": {
-        "fun": df.conflict_dsstimflex_dual_drift,
-        "params": [
-            "tinit",
-            "dinit",
-            "tslope",
-            "dslope",
-            "tfixedp",
-            "dfixedp",
             "tcoh",
             "dcoh",
             "tonset",
@@ -149,29 +126,16 @@ drift_config = {
 
 # Weight configurations (multiplicative, time-varying weight on the decision variable)
 weight_config = {
-    "weight_window": {
-        "fun": df.weight_window,
-        "params": ["tonset", "toffset", "donset", "doffset", "wmin", "wtaurise", "wtaufall"],
+    "hazard_gate": {
+        "fun": df.hazard_gate,
+        "params": ["tonset", "toffset", "tcoh", "donset", "doffset", "dcoh", "wbaseline", "wtarget", "wdistractor", "wmin", "wtaurise"],
     },
-    "weight_window_ds": {
-        "fun": df.weight_window_ds,
-        "params": ["tonset", "toffset", "wmin", "wtaurise", "wtaufall", "winit", "wslope"],
+    "logit_gate": {
+        "fun": df.logit_gate,
+        "params": ["tonset", "donset", "wmin", "wtaurise", "wtarget"],
     },
-    "prob_gate": {
-        "fun": df.prob_gate,
-        "params": ["tonset", "toffset", "tcoh", "donset", "doffset", "dcoh", "vtaurise", "vtaufall", "wbaseline", "wtarget", "wdistractor"],
+    "logitlin": {
+        "fun": df.logitlin,
+        "params": ["tonset", "donset", "wmin", "wtaurise", "wtarget", "wtargetslope", "wdistractorslope"],
     },
-    "parametric_weight": {
-        "fun": df.parametric_weight,
-        "params": ["tonset", "tcoh", "donset", "dcoh", "vtaurise", "wbaseline", "wtarget", "wdistractor"],
-    },
-    "parametric_mixture": {
-        "fun": df.parametric_mixture,
-        "params": ["tonset", "donset", "wmin", "wtaurise", "wtarget", "wdistractor"],
-    },
-    "parametric_mixture_det": {
-        "fun": df.parametric_mixture_det,
-        "params": ["tonset", "donset", "wmin", "wtaurise", "wtarget", "wdistractor"],
-    },
-
 }

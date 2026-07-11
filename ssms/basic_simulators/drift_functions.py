@@ -2,7 +2,6 @@
 
 # External
 from collections.abc import Callable
-from functools import partial
 
 import numpy as np
 from scipy.signal import lfilter
@@ -333,8 +332,8 @@ def filtered_pulse(
     """One stimulus channel's drift: ``lowpass(boxcar(coh) * weight)``.
 
     The coherence boxcar on ``[onset, offset]`` gates a within-trial drift ``weight`` --
-    a scalar for static drift (see :func:`stimflex_support`) or a per-timepoint array for
-    dynamic drift (:func:`linear_scale`, :func:`ds_support_analytic`). The product is then
+    a scalar for static drift or a per-timepoint array for dynamic drift 
+    (:func:`linear_scale`, :func:`ds_support_analytic`). The product is then
     passed through :func:`piecewise_lowpass`, smoothing the onset (``tau_rise``) and the
     post-offset tail (``tau_fall``).
     """
@@ -342,39 +341,79 @@ def filtered_pulse(
     return piecewise_lowpass(t, raw, offset, tau_rise, tau_fall)
 
 
-def stimflex_support(
-    t: np.ndarray,
-    onset: float,
-    offset: float,
-    coh: float,
-    tau_rise: float,
-    tau_fall: float,
+def conflict_stimflex_drift(
+    t: np.ndarray | None,
+    vt: float = 0,
+    vd: float = 0,
+    tcoh: float = 1.0,
+    dcoh: float = 1.0,
+    tonset: float = 0,
+    donset: float = 0,
+    toffset: float | None = None,
+    doffset: float | None = None,
+    vtaurise: float = 0.05,
+    vtaufall: float = 0.1,
+    sum_drifts: bool = True,
 ) -> np.ndarray:
-    """Construct a coherence timecourse with flexible onset/offset and
-    exponential rise/fall (causal low-pass filter).
+    """Drift function for conflict task with static drift rates and stimuli with
+    potentially variable onset/duration and exponential rise/fall.
 
-    Thin wrapper for :func:`filtered_pulse` with unit (static) weight: builds the boxcar
-    (``coh`` on ``[onset, offset]``, else 0) and passes it through the causal IIR filter.
-
-    Arguments
+    Arguments:
     ---------
         t: np.ndarray
-            Timepoints within trial (uniformly spaced).
-        onset: float
-            Time at which the stimulus begins rising.
-        offset: float
-            Time at which the stimulus begins falling.
-        coh: float
-            Coherence of the stimulus when fully 'on'.
-        tau_rise: float
-            Time constant for the exponential rise.
-        tau_fall: float
-            Time constant for the exponential fall.
+            Timepoints at which to evaluate the drift.
+            Usually np.arange() of some sort.
+        tcoh: float
+            Coherence of the target stimulus when 'on'.
+        dcoh: float
+            Coherence of the distractor stimulus when 'on'.
+        vt: float
+            Static drift-rate of target stimulus, when 'on'.
+        vd: float
+            Static drift-rate of distractor stimulus, when 'on'.
+        tonset: float
+            Onset time of the target stimulus coherence.
+        donset: float
+            Onset time of the distractor stimulus coherence.
+        toffset, doffset: float or None
+            Offset time of the stimulus coherence pulse. If None, the pulse
+            lasts until the end of the trial.
+        vtaurise, vtaufall: float
+            Time constants for the exponential rise/fall of the stimulus envelope.
+        sum_drifts: bool
+            If True, the drift contributions from target and distractor
+            are summed to produce a single drift timecourse. If False,
+            a 2D array is returned with separate columns for target
+            and distractor drift timecourses.
     Returns
     -------
-        np.ndarray: Array of coherence values, same length as t.
+        np.ndarray: Array of drift values, same length as t. If sum_drifts
+            is False, the array has shape (len(t), 2)
     """
-    return filtered_pulse(t, coh, 1.0, onset, offset, tau_rise, tau_fall)
+    if t is None:
+        t = np.arange(0, 20, 0.1)
+    if toffset is None:
+        toffset = np.max(t)
+    if doffset is None:
+        doffset = np.max(t)
+    tdrift = filtered_pulse(t, tcoh, vt, tonset, toffset, vtaurise, vtaufall)
+    ddrift = filtered_pulse(t, dcoh, vd, donset, doffset, vtaurise, vtaufall)
+    if sum_drifts:
+        return tdrift + ddrift
+    else:
+        return np.column_stack((tdrift, ddrift))
+
+
+def conflict_stimflex_dual_drift(t: np.ndarray | None, **kwargs) -> np.ndarray:
+    """Two-column (target, distractor) drift for dual-particle simulators.
+
+    Thin wrapper around :func:`conflict_stimflex_drift` with ``sum_drifts=False``, so it
+    returns the target and distractor drift timecourses column-stacked (shape ``(len(t), 2)``)
+    rather than summed. Consumed by :func:`cssm.ddm_flex_weight_dualleak`, whose two leaky
+    accumulators need the drifts kept separate. Defined as a named function (not a
+    ``functools.partial``) so the simulator's ``drift_fun.__name__`` metadata read works.
+    """
+    return conflict_stimflex_drift(t, sum_drifts=False, **kwargs)
 
 
 def conflict_dsstimflex_drift(
@@ -429,11 +468,6 @@ def conflict_dsstimflex_drift(
             Onset time of the distractor stimulus coherence.
         vtaurise, vtaufall: float
             Time constants for the exponential rise/fall of the stimulus envelope.
-        rel_first: bool
-            If True, the first stimulus to appear (target or distractor)
-            is treated as appearing at time 0, and the other stimulus
-            is adjusted accordingly. If False, the onsets are treated
-            as absolute times.
     """
     if t is None:
         t = np.arange(0, 20, 0.1)
@@ -479,7 +513,7 @@ def conflict_dsstimflexlin_drift(
     the exponential ``ds_support_analytic``, so variable onsets sample different segments
     of one latent trajectory -- tilt shows up mostly as an onset-graded (across-trial)
     effect, plus a small within-window slope. ``tilt = 0`` recovers a static (boxcar)
-    drift, matching :func:`stimflex_support` scaled by ``level``.
+    drift, matching :func:`conflict_stimflex_drift` with the drift rate set to ``level``.
 
     Arguments:
     ---------
@@ -523,130 +557,23 @@ def conflict_dsstimflexlin_drift(
         return np.column_stack((tdrift, ddrift))
 
 
-def conflict_stimflex_drift(
-    t: np.ndarray | None,
-    vt: float = 0,
-    vd: float = 0,
-    tcoh: float = 1.0,
-    dcoh: float = 1.0,
-    tonset: float = 0,
-    donset: float = 0,
-    toffset: float | None = None,
-    doffset: float | None = None,
-    vtaurise: float = 0.05,
-    vtaufall: float = 0.1,
-    rel_first: bool = False,
-    sum_drifts: bool = True,
+def soft_gate(
+    t: np.ndarray,
+    onset: float,
+    tau_rise: float,
+    wmin: float
 ) -> np.ndarray:
-    """Drift function for conflict task with static drift rates and stimuli with
-    potentially variable onset/duration and exponential rise/fall.
+    """Gate that latches open at ``onset`` and stays open.
 
-    Arguments:
-    ---------
-        t: np.ndarray
-            Timepoints at which to evaluate the drift.
-            Usually np.arange() of some sort.
-        tcoh: float
-            Coherence of the target stimulus when 'on'.
-        dcoh: float
-            Coherence of the distractor stimulus when 'on'.
-        vt: float
-            Static drift-rate of target stimulus, when 'on'.
-        vd: float
-            Static drift-rate of distractor stimulus, when 'on'.
-        tonset: float
-            Onset time of the target stimulus coherence.
-        donset: float
-            Onset time of the distractor stimulus coherence.
-        toffset, doffset: float or None
-            Offset time of the stimulus coherence pulse. If None, the pulse
-            lasts until the end of the trial.
-        vtaurise, vtaufall: float
-            Time constants for the exponential rise/fall of the stimulus envelope.
-        rel_first: bool
-            If True, the first stimulus to appear (target or distractor)
-            is treated as appearing at time 0, and the other stimulus
-            is adjusted accordingly. If False, the onsets are treated
-            as absolute times.
-        sum_drifts: bool
-            If True, the drift contributions from target and distractor
-            are summed to produce a single drift timecourse. If False,
-            a 2D array is returned with separate columns for target
-            and distractor drift timecourses.
-    Returns
-    -------
-        np.ndarray: Array of drift values, same length as t. If sum_drifts
-            is False, the array has shape (len(t), 2)
+    Before ``onset`` the gate sits at its leaky-closed floor ``wmin``; at ``onset`` it
+    transitions toward 1 with rise time ``tau_rise`` (a causal low-pass of a step to
+    ``1 - wmin``) and does not fall again (``tau_fall = 1e12``). If ``onset`` is beyond
+    the time grid (e.g. ``np.inf`` from :func:`sample_hazard_onset`, i.e. the gate never
+    opens) the boxcar is all-zero and the gate stays at ``wmin`` throughout. Shared by
+    :func:`hazard_gate`, :func:`logit_gate`, and :func:`logitlin` as the open-transition.
     """
-    if t is None:
-        t = np.arange(0, 20, 0.1)
-    if rel_first:
-        first = min(tonset, donset)
-        tonset -= first
-        donset -= first
-    if toffset is None:
-        toffset = np.max(t)
-    if doffset is None:
-        doffset = np.max(t)
-    tcohs = stimflex_support(t, tonset, toffset, tcoh, vtaurise, vtaufall)
-    dcohs = stimflex_support(t, donset, doffset, dcoh, vtaurise, vtaufall)
-    if sum_drifts:
-        return vt * tcohs + vd * dcohs
-    else:
-        return np.column_stack((vt * tcohs, vd * dcohs))
-
-
-# Re-use drift fun but set different default args
-conflict_stimflexrel1_drift = partial(conflict_stimflex_drift, rel_first=True)
-conflict_stimflexrel1_dual_drift = partial(
-    conflict_stimflex_drift, rel_first=True, sum_drifts=False
-)
-conflict_dsstimflex_dual_drift = partial(
-    conflict_dsstimflex_drift, sum_drifts=False
-)
-
-
-def weight_window(
-    t: np.ndarray | None,
-    tonset: float = 0.0,
-    toffset: float = 1.0,
-    donset: float = 0.0,
-    doffset: float = 1.0,
-    wmin: float = 0.0,
-    wtaurise: float = 0.05,
-    wtaufall: float = 0.1,
-    onoff_method: str = "target",
-    rng=None,  # deterministic; accepted so cssm can inject uniformly
-) -> np.ndarray:
-    if t is None:
-        t = np.arange(0, 20, 0.1)
-    if onoff_method == "target":
-        onset = tonset
-        offset = toffset
-    elif onoff_method == "first-last":
-        onset = min(tonset, donset)
-        offset = max(toffset, doffset)
-    return stimflex_support(t, onset, offset, 1 - wmin, wtaurise, wtaufall) + wmin
-
-
-def weight_window_ds(
-    t: np.ndarray | None,
-    tonset: float = 0.0,
-    toffset: float = 1.0,
-    wmin: float = 0.0,
-    wtaurise: float = 0.05,
-    wtaufall: float = 0.1,
-    winit: float = 0,
-    wslope: float = 0.2,
-    rng=None,  # deterministic; accepted so cssm can inject uniformly
-) -> np.ndarray:
-    if t is None:
-        t = np.arange(0, 20, 0.1)
-    ## Stimulus-driven weight:
-    stim_weight = stimflex_support(t, tonset, toffset, 1 - wmin, wtaurise, wtaufall)
-    ## Cue-locked weight (scale amplitude of stim-driven):
-    cue_weight = ds_support_analytic(t=t, init_p=winit, fix_point=1, slope=wslope)
-    return stim_weight * cue_weight + wmin
+    raw = boxcar(t, onset, t.max(), 1 - wmin)
+    return piecewise_lowpass(t, raw, t.max(), tau_rise, 1e12) + wmin
 
 
 def sample_hazard_onset(t, rate, rng):
@@ -657,7 +584,7 @@ def sample_hazard_onset(t, rate, rng):
     return t[idx] if idx < t.shape[0] else np.inf
 
 
-def prob_gate(
+def hazard_gate(
     t: np.ndarray | None,
     tonset: float = 0.0,
     toffset: float = 1.0,
@@ -665,87 +592,151 @@ def prob_gate(
     donset: float = 0.0,
     doffset: float = 1.0,
     dcoh: float = 1.0,
-    vtaurise: float = 0.05,
-    vtaufall: float = 0.1,
     wbaseline: float = 0,
     wtarget: float = 1,
     wdistractor: float = 1,
+    wmin: float = 0,
+    wtaurise: float = 0.05,
     rng=None,  # injected by cssm; unseeded fallback only when called standalone
 ) -> np.ndarray:
+    """Continuous-time detection gate: opening time drawn from a stimulus-driven hazard.
+
+    A *memoryless* gate. The instantaneous opening rate is a log-linear (proportional-
+    hazards) function of the momentary stimulus energy -- the unfiltered coherence boxcars::
+
+        rate(t) = exp( |tcoh|*wtarget + |dcoh|*wdistractor + wbaseline )
+
+    ``wbaseline`` is the log baseline rate (spontaneous opening with no stimulus); ``wtarget``
+    /``wdistractor`` are log-hazard-ratios per unit coherence (sign-free -- presence may raise
+    or lower the rate). A single opening time is drawn via :func:`sample_hazard_onset`
+    (dt-consistent survival sampling; may be ``inf`` = never opens), then the gate latches
+    open from ``wmin`` toward 1 with rise time ``wtaurise`` (see :func:`soft_gate`).
+
+    Arguments
+    ---------
+        t: np.ndarray
+            Timepoints (uniform grid).
+        tonset, toffset, donset, doffset: float
+            Onset/offset of the target/distractor coherence boxcars.
+        tcoh, dcoh: float
+            Target/distractor coherence (only ``|coh|`` enters the evidence).
+        wbaseline: float
+            Log baseline opening rate (coherence-independent).
+        wtarget, wdistractor: float
+            Log-hazard-ratio contributed by target/distractor presence, per unit coherence.
+        wmin: float
+            Leaky-closed floor before opening.
+        wtaurise: float
+            Rise time of the open transition.
+        rng: np.random.Generator
+            Injected by cssm; unseeded fallback only when called standalone.
+    """
     if t is None:
         t = np.arange(0, 20, 0.1)
-    target_energy = stimflex_support(t, tonset, toffset, np.abs(tcoh), vtaurise, vtaufall)
-    distractor_energy = stimflex_support(t, donset, doffset, np.abs(dcoh), vtaurise, vtaufall)
-    rate = np.exp(target_energy * wtarget + distractor_energy * wdistractor + wbaseline)
+    tenergy = boxcar(t, tonset, toffset, np.abs(tcoh))
+    denergy = boxcar(t, donset, doffset, np.abs(dcoh))
+    rate = np.exp(tenergy * wtarget + denergy * wdistractor + wbaseline)
     if rng is None:
         rng = np.random.default_rng()
-    return (t > sample_hazard_onset(t, rate, rng)).astype(float)
+    t_open = sample_hazard_onset(t, rate, rng)
+    return soft_gate(t, t_open, wtaurise, wmin)
 
 
-def parametric_weight(
-    t: np.ndarray | None,
-    tonset: float = 0.0,
-    donset: float = 0.0,
-    tcoh: float = 1.0,
-    dcoh: float = 1.0,
-    vtaurise: float = 0.05,
-    wbaseline: float = 0,
-    wtarget: float = 1,
-    wdistractor: float = 1,
-    rng=None,  # deterministic; accepted so cssm can inject uniformly
-) -> np.ndarray:
-    if t is None:
-        t = np.arange(0, 20, 0.1)
-    target_energy = stimflex_support(t, tonset, np.max(t), np.abs(tcoh), vtaurise, 1e12)
-    distractor_energy = stimflex_support(t, donset, np.max(t), np.abs(dcoh), vtaurise, 1e12)
-    return expit(target_energy * wtarget + distractor_energy * wdistractor + wbaseline)
-
-
-def parametric_mixture(
+def logit_gate(
     t: np.ndarray | None,
     tonset: float = 0.0,
     donset: float = 0.0,
     wmin: float = 0.0,
     wtaurise: float = 0.05,
     wtarget: float = 0,
-    wdistractor: float = 0,
     rng=None,  # injected by cssm; unseeded fallback only when called standalone
 ) -> np.ndarray:
-    if t is None:
-        t = np.arange(0, 20, 0.005)
-    if rng is None:
-        rng = np.random.default_rng()
-    onset = rng.choice([min(tonset, donset), tonset, donset], p = softmax([0, wtarget, wdistractor]))
-    return stimflex_support(t, onset, t.max(), 1 - wmin, wtaurise, 1e12) + wmin
+    """Discrete onset-selection gate: opens at the target or distractor onset.
 
+    A one-shot attentional-capture gate: the gate always opens, at one of the two stimulus
+    onsets, chosen by a 2-class softmax (target vs distractor, distractor = reference)::
 
-def parametric_mixture_det(
-    t: np.ndarray | None,
-    tonset: float = 0.0,
-    donset: float = 0.0,
-    wmin: float = 0.0,
-    wtaurise: float = 0.05,
-    wtarget: float = 0,
-    wdistractor: float = 0,
-    rng=None,  # accepted for a uniform cssm signature; deterministic, so unused
-) -> np.ndarray:
-    """Deterministic counterpart to ``parametric_mixture``.
+        p(target) = softmax([wtarget, 0]) -> expit(wtarget)
 
-    Instead of sampling a single onset per trial, return the softmax-weighted *average*
-    of the three candidate weight windows (baseline=earlier stimulus, target onset,
-    distractor onset), with mixing weights ``softmax([0, wtarget, wdistractor])``. Every
-    trial with the same parameters/design yields the identical weight timecourse, which
-    removes the trial-level mixture noise and sharpens the likelihood -- making
-    ``wtarget``/``wdistractor`` more identifiable than the stochastic version.
+    ``wtarget`` is the log-odds of selecting the target onset over the distractor onset. The
+    chosen onset is then passed to :func:`soft_gate` (latch open from ``wmin`` toward 1 with
+    rise time ``wtaurise``). With a large ``wtarget`` the target onset is always selected,
+    recovering a deterministic window gate (and for simultaneous onsets ``tonset == donset``
+    the choice is a no-op). Needs asynchronous onsets to be identifiable.
+
+    Arguments
+    ---------
+        t: np.ndarray
+            Timepoints (uniform grid).
+        tonset, donset: float
+            Candidate opening times (target/distractor onsets).
+        wmin: float
+            Leaky-closed floor before opening.
+        wtaurise: float
+            Rise time of the open transition.
+        wtarget: float
+            Log-odds of selecting the target onset (vs the distractor reference).
+        rng: np.random.Generator
+            Injected by cssm; unseeded fallback only when called standalone.
     """
     if t is None:
         t = np.arange(0, 20, 0.005)
-    onsets = (min(tonset, donset), tonset, donset)
-    p = softmax([0.0, wtarget, wdistractor])
-    windows = np.stack(
-        [stimflex_support(t, onset, t.max(), 1 - wmin, wtaurise, 1e12) for onset in onsets])
-    # sum_k p_k * (stim_k + wmin) = (sum_k p_k stim_k) + wmin, since sum_k p_k = 1.
-    return wmin + p @ windows
+    if rng is None:
+        rng = np.random.default_rng()
+    onset = rng.choice([tonset, donset], p = softmax([wtarget, 0]))
+    return soft_gate(t, onset, wtaurise, wmin)
+
+
+def logitlin(
+    t: np.ndarray | None,
+    tonset: float = 0.0,
+    donset: float = 0.0,
+    wmin: float = 0.0,
+    wtaurise: float = 0.05,
+    wtarget: float = 0.0,
+    wtargetslope: float = 0.0,
+    wdistractorslope: float = 0.0,
+    rng=None,  # injected by cssm; unseeded fallback only when called standalone
+) -> np.ndarray:
+    """Onset-time-dependent variant of :func:`logit_gate`.
+
+    Same 2-class onset selection (target vs distractor), but each option's selection logit
+    varies linearly with *its own* onset time (raw, cue-locked)::
+
+        logit(target)     = wtarget + wtargetslope * tonset
+        logit(distractor) =           wdistractorslope * donset   (distractor = reference)
+
+    This is the general 2-option linear-in-onset model: an identity intercept (``wtarget``)
+    plus one slope per stimulus. A shared negative slope encodes primacy (earlier onset
+    favored); differing slopes encode stimulus-specific timing sensitivity. Unlike
+    :func:`logit_gate`, capture propensity now depends on *when* each stimulus appeared --
+    identified from across-trial onset/SOA variation (needs asynchronous onsets).
+
+    Arguments
+    ---------
+        t: np.ndarray
+            Timepoints (uniform grid).
+        tonset, donset: float
+            Candidate opening times (target/distractor onsets).
+        wmin: float
+            Leaky-closed floor before opening.
+        wtaurise: float
+            Rise time of the open transition.
+        wtarget: float
+            Target-vs-distractor selection intercept (log-odds at onset 0).
+        wtargetslope, wdistractorslope: float
+            Slope of the target/distractor selection logit on its own (raw) onset time.
+        rng: np.random.Generator
+            Injected by cssm; unseeded fallback only when called standalone.
+    """
+    if t is None:
+        t = np.arange(0, 20, 0.005)
+    if rng is None:
+        rng = np.random.default_rng()
+    logit_t = wtarget + wtargetslope * tonset
+    logit_d = wdistractorslope * donset
+    onset = rng.choice([tonset, donset], p = softmax([logit_t, logit_d]))
+    return soft_gate(t, onset, wtaurise, wmin)
 
 
 # Type alias for drift functions
@@ -756,13 +747,10 @@ constant: DriftFunction = constant  # noqa: PLW0127
 gamma_drift: DriftFunction = gamma_drift  # noqa: PLW0127
 ds_support_analytic: DriftFunction = ds_support_analytic  # noqa: PLW0127
 conflict_ds_drift: DriftFunction = conflict_ds_drift  # noqa: PLW0127
+conflict_stimflex_drift: DriftFunction = conflict_stimflex_drift  # noqa: PLW0127
+conflict_stimflex_dual_drift: DriftFunction = conflict_stimflex_dual_drift  # noqa: PLW0127
 conflict_dsstimflex_drift: DriftFunction = conflict_dsstimflex_drift  # noqa: PLW0127
 conflict_dsstimflexlin_drift: DriftFunction = conflict_dsstimflexlin_drift  # noqa: PLW0127
-conflict_stimflex_drift: DriftFunction = conflict_stimflex_drift  # noqa: PLW0127
-conflict_dsstimflex_dual_drift: DriftFunction = conflict_dsstimflex_dual_drift  # noqa: PLW0127
-weight_window: DriftFunction = weight_window  # noqa: PLW0127
-weight_window_ds: DriftFunction = weight_window_ds  # noqa: PLW0127
-prob_gate: DriftFunction = prob_gate  # noqa: PLW0127
-parametric_weight: DriftFunction = parametric_weight  # noqa: PLW0127
-parametric_mixture: DriftFunction = parametric_mixture  # noqa: PLW0127
-parametric_mixture_det: DriftFunction = parametric_mixture_det  # noqa: PLW0127
+hazard_gate: DriftFunction = hazard_gate  # noqa: PLW0127
+logit_gate: DriftFunction = logit_gate  # noqa: PLW0127
+logitlin: DriftFunction = logitlin  # noqa: PLW0127

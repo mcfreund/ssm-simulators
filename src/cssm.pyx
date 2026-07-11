@@ -1063,198 +1063,10 @@ def ddm_flex_weight(np.ndarray[float, ndim = 1] v,
         raise ValueError('return_option must be either "full" or "minimal"')
 
 
-# Simulate (rt, choice) tuples from: DDM WITH FLEXIBLE BOUNDARIES, FLEXIBLE SLOPE, AND DECAY ----------
+# Simulate (rt, choice) tuples from: DUAL-PARTICLE LEAKY DDM WITH FLEX BOUNDS, FLEX DRIFT, AND A DV WEIGHT
 # @cythonboundscheck(False)
 # @cythonwraparound(False)
-def ddm_flex_leak(np.ndarray[float, ndim = 1] v,
-             np.ndarray[float, ndim = 1] a,
-             np.ndarray[float, ndim = 1] z,
-             np.ndarray[float, ndim = 1] g,
-             np.ndarray[float, ndim = 1] t,
-             np.ndarray[float, ndim = 1] deadline,
-             np.ndarray[float, ndim = 1] s, # noise sigma
-             float delta_t = 0.001,
-             float max_t = 20,
-             int n_samples = 20000,
-             int n_trials = 1,
-             boundary_fun = None, # function of t (and potentially other parameters) that takes in (t, *args)
-             drift_fun = None,
-             boundary_multiplicative = True,
-             boundary_params = {},
-             drift_params = {},
-             random_state = None,
-             return_option = 'full',
-             smooth_unif  = False,
-             **kwargs):
-    """
-    Simulate reaction times and choices from a drift diffusion model with flexible boundaries, flexible drift, and decay.
-
-    Args:
-        v (np.ndarray): Drift rate for each trial.
-        a (np.ndarray): Boundary separation for each trial.
-        z (np.ndarray): Starting point (between 0 and 1) for each trial.
-        g (np.ndarray): Decay parameter for each trial.
-        t (np.ndarray): Non-decision time for each trial.
-        deadline (np.ndarray): Maximum reaction time allowed for each trial.
-        s (np.ndarray): Noise standard deviation for each trial.
-        delta_t (float): Time step size (default: 0.001).
-        max_t (float): Maximum simulation time (default: 20).
-        n_samples (int): Number of samples per trial (default: 20000).
-        n_trials (int): Number of trials to simulate (default: 1).
-        boundary_fun (callable): Function defining the decision boundary over time.
-        drift_fun (callable): Function defining the drift rate over time.
-        boundary_multiplicative (bool): If True, boundary function is multiplicative; if False, additive.
-        boundary_params (dict): Parameters for the boundary function.
-        drift_params (dict): Parameters for the drift function.
-        random_state (int or None): Seed for random number generator (default: None).
-        return_option (str): 'full' or 'minimal' return format (default: 'full').
-        smooth_unif (bool): Whether to apply uniform smoothing to reaction times (default: False).
-        **kwargs: Additional keyword arguments.
-
-    Returns:
-        dict: A dictionary containing simulated reaction times, choices, and metadata.
-              The exact contents depend on the return_option.
-
-    Raises:
-        ValueError: If return_option is neither 'full' nor 'minimal'.
-    """
-
-    set_seed(random_state)
-    # Param views:
-    cdef float[:] v_view = v
-    cdef float[:] a_view = a
-    cdef float[:] z_view = z
-    cdef float[:] g_view = g
-    cdef float[:] t_view = t
-    cdef float[:] deadline_view = deadline
-    cdef float[:] s_view = s
-
-    traj = np.zeros((int(max_t / delta_t) + 1, 1), dtype = DTYPE)
-    traj[:, :] = -999 
-    cdef float[:,:] traj_view = traj
-
-    rts = np.zeros((n_samples, n_trials, 1), dtype = DTYPE)
-    choices = np.zeros((n_samples, n_trials, 1), dtype = np.intc)
-
-    cdef float[:, :, :] rts_view = rts
-    cdef int[:, :, :] choices_view = choices
-
-    cdef float delta_t_sqrt = sqrt(delta_t) # correct scalar so we can use standard normal samples for the brownian motion
-    #cdef float sqrt_st = delta_t_sqrt * s # scalar to ensure the correct variance for the gaussian step
-
-    # Boundary storage for the upper bound
-    cdef int num_draws = int((max_t / delta_t) + 1)
-    t_s = np.arange(0, max_t + delta_t, delta_t).astype(DTYPE)
-    boundary = np.zeros(t_s.shape, dtype = DTYPE)
-    drift = np.zeros(t_s.shape, dtype = DTYPE)
-    cdef float y, t_particle, smooth_u, deadline_tmp, sqrt_st
-    cdef Py_ssize_t n 
-    cdef Py_ssize_t ix
-    cdef Py_ssize_t m = 0
-    cdef Py_ssize_t k
-    cdef float[:] gaussian_values = draw_gaussian(num_draws)
-    cdef float[:] boundary_view = boundary
-    cdef float[:] drift_view = drift
-
-    # Loop over samples
-    for k in range(n_trials):
-        # Precompute boundary evaluations and drift evaluations
-        
-        # Drift
-        drift_params_tmp = {key: drift_params[key][k] for key in drift_params.keys()}
-        drift[:] = np.add(v_view[k], drift_fun(t = t_s, **drift_params_tmp)).astype(DTYPE)
-
-        # Boundary
-        boundary_params_tmp = {key: boundary_params[key][k] for key in boundary_params.keys()}
-        if boundary_multiplicative:
-            boundary[:] = np.multiply(a_view[k], boundary_fun(t = t_s, **boundary_params_tmp)).astype(DTYPE)
-        else:
-            boundary[:] = np.add(a_view[k], boundary_fun(t = t_s, **boundary_params_tmp)).astype(DTYPE)
-
-        deadline_tmp = min(max_t, deadline_view[k] - t_view[k])
-        sqrt_st = delta_t_sqrt * s_view[k]
-        for n in range(n_samples):
-            y = (-1) * boundary_view[0] + (z_view[k] * 2 * (boundary_view[0]))  # reset starting position 
-            t_particle = 0.0 # reset time
-            ix = 0 # reset boundary index
-            
-            
-            # Can improve with less checks
-            if n == 0:
-                if k == 0:
-                    traj_view[0, 0] = y
-
-            # Random walker
-            while (y >= (-1) * boundary_view[ix]) and (y <= boundary_view[ix]) and (t_particle <= deadline_tmp):
-                y += ((drift_view[ix] - (g_view[k] * y)) * delta_t) + (sqrt_st * gaussian_values[m])
-                t_particle += delta_t
-                ix += 1
-                m += 1
-                
-                # Can improve with less checks
-                if n == 0:
-                    if k == 0:
-                        traj_view[ix, 0] = y
-                
-                # Can improve with less checks
-                if m == num_draws:
-                    gaussian_values = draw_gaussian(num_draws)
-                    m = 0
-
-            if smooth_unif :
-                if t_particle == 0.0:
-                    smooth_u = random_uniform() * 0.5 * delta_t
-                elif t_particle < deadline_tmp:
-                    smooth_u = (0.5 - random_uniform()) * delta_t
-                else:
-                    smooth_u = 0.0
-            else:
-                smooth_u = 0.0
-
-            rts_view[n, k, 0] = t_particle + t_view[k] + smooth_u # Store rt
-            choices_view[n, k, 0] = sign(y) # Store choice
-
-            if (rts_view[n, k, 0] >= deadline_view[k]) | (deadline_view[k] <= 0):
-                rts_view[n, k, 0] = -999
-    
-    if return_option == 'full':
-        return {'rts': rts, 'choices': choices,  'metadata': {'v': v,
-                                                            'a': a,
-                                                            'z': z,
-                                                            'g': g,
-                                                            't': t,
-                                                            'deadline': deadline,
-                                                            's': s,
-                                                            **boundary_params,
-                                                            **drift_params,
-                                                            'delta_t': delta_t,
-                                                            'max_t': max_t,
-                                                            'n_samples': n_samples,
-                                                            'n_trials': n_trials,
-                                                            'simulator': 'ddm_flex_leak',
-                                                            'boundary_fun_type': boundary_fun.__name__,
-                                                            'drift_fun_type': boundary_fun.__name__,
-                                                            'possible_choices': [-1, 1],
-                                                            'trajectory': traj,
-                                                            'drift': drift,
-                                                            'boundary': boundary}}
-    elif return_option == 'minimal':
-        return {'rts': rts, 'choices': choices,  'metadata': {'simulator': 'ddm_flex_leak', 
-                                                             'possible_choices': [-1, 1],
-                                                             'boundary_fun_type': boundary_fun.__name__,
-                                                             'drift_fun_type': boundary_fun.__name__,
-                                                             'n_samples': n_samples,
-                                                             'n_trials': n_trials,
-                                                             }}
-    else:
-        raise ValueError('return_option must be either "full" or "minimal"')
-
-
-
-# Simulate (rt, choice) tuples from: DDM WITH FLEXIBLE BOUNDARIES, FLEXIBLE SLOPE, AND DUAL LEAK ----------
-# @cythonboundscheck(False)
-# @cythonwraparound(False)
-def ddm_flex_leak2(
+def ddm_flex_weight_dualleak(
     np.ndarray[float, ndim = 1] a,
     np.ndarray[float, ndim = 1] z,
     np.ndarray[float, ndim = 1] gt,
@@ -1268,31 +1080,30 @@ def ddm_flex_leak2(
     int n_trials = 1,
     boundary_fun = None, # function of t (and potentially other parameters) that takes in (t, *args)
     drift_fun = None,
+    weight_fun = None, # function of t that returns a [0, 1] weight on the decision variable
     boundary_multiplicative = True,
     boundary_params = {},
     drift_params = {},
+    weight_params = {},
     random_state = None,
     return_option = 'full',
     smooth_unif  = False,
     **kwargs):
     """
-    Simulate reaction times and choices from a sequential sampling model that pools choice evidence across two sensory 
-    input dimensions, one 'target' and one 'distractor', with flexible boundaries, flexible drifts, and separate decay
-    parameters.
+    Simulate reaction times and choices from a dual-accumulator leaky diffusion model with a
+    multiplicative, time-varying weight on the decision variable.
 
-    This model assumes two accumulators for two sensory input dimensions, a 'target' and 'distractor' dimension. Each 
-    accumulator has its own drift rate and decay parameter, but fully share noise. The decision variable (DV) from each
-    accumulator, `y_t` and `y_d`, is summed to form a single DV, `y`, which is compared to the decision boundaries.
-    Individual accumulators are always initiated with no starting-point bias; instead, the starting point bias is 
-    applied to the combined DV `y`.
+    Combines ddm_flex_leak2 (two accumulators, 'target' and 'distractor', each with its own
+    drift column and decay parameter gt/gd, sharing noise; their decision variables y_t and y_d
+    are summed into a single DV y compared against the boundaries; starting-point bias is applied
+    to the combined DV) with the windowed-integration gate of ddm_flex_weight (at each timestep
+    the momentary evidence of *both* accumulators is scaled by weight_fun(t) in [0, 1]).
 
     Args:
-        vt (np.ndarray): Drift rate for target input for each trial.
-        vd (np.ndarray): Drift rate for distractor input for each trial.
         a (np.ndarray): Boundary separation for each trial.
         z (np.ndarray): Starting point (between 0 and 1) for each trial.
-        gt (np.ndarray): Decay parameter for target input for each trial.
-        gd (np.ndarray): Decay parameter for distractor input for each trial.
+        gt (np.ndarray): Decay parameter for the target accumulator for each trial.
+        gd (np.ndarray): Decay parameter for the distractor accumulator for each trial.
         t (np.ndarray): Non-decision time for each trial.
         deadline (np.ndarray): Maximum reaction time allowed for each trial.
         s (np.ndarray): Noise standard deviation for each trial.
@@ -1301,10 +1112,12 @@ def ddm_flex_leak2(
         n_samples (int): Number of samples per trial (default: 20000).
         n_trials (int): Number of trials to simulate (default: 1).
         boundary_fun (callable): Function defining the decision boundary over time.
-        drift_fun (callable): Function defining the drift rate over time.
+        drift_fun (callable): Function returning the two drift columns (target, distractor) over time.
+        weight_fun (callable): Function defining the decision-variable weight over time.
         boundary_multiplicative (bool): If True, boundary function is multiplicative; if False, additive.
         boundary_params (dict): Parameters for the boundary function.
         drift_params (dict): Parameters for the drift function.
+        weight_params (dict): Parameters for the weight function.
         random_state (int or None): Seed for random number generator (default: None).
         return_option (str): 'full' or 'minimal' return format (default: 'full').
         smooth_unif (bool): Whether to apply uniform smoothing to reaction times (default: False).
@@ -1329,7 +1142,7 @@ def ddm_flex_leak2(
     cdef float[:] s_view = s
 
     cdef int num_draws = int((max_t / delta_t) + 1)
-    
+
     traj = np.zeros((num_draws, 3), dtype = DTYPE)
     traj[:, :] = -999
     cdef float[:, :] traj_view = traj
@@ -1346,22 +1159,33 @@ def ddm_flex_leak2(
     t_s = np.arange(0, max_t + delta_t, delta_t).astype(DTYPE)
     boundary = np.zeros(t_s.shape, dtype = DTYPE)
     drift = np.zeros((t_s.shape[0], 2), dtype = DTYPE)
+    weight = np.zeros(t_s.shape, dtype = DTYPE)
     cdef float y_t, y_d, y_start, y, t_particle, smooth_u, deadline_tmp, sqrt_st
-    cdef Py_ssize_t n 
+    cdef Py_ssize_t n
     cdef Py_ssize_t ix
     cdef Py_ssize_t m = 0
     cdef Py_ssize_t k
     cdef float[:] gaussian_values = draw_gaussian(num_draws)
     cdef float[:] boundary_view = boundary
     cdef float[:, :] drift_view = drift
+    cdef float[:] weight_view = weight
+
+    # Numpy generator seeded from the same master seed (set_seed above), so the
+    # Python weight callback draws reproducibly and in step with the C diffusion
+    # noise. Consumed once per trial across the loop below.
+    weight_rng = np.random.default_rng(random_state)
 
     # Loop over samples
     for k in range(n_trials):
-        # Precompute boundary evaluations and drift evaluations
-        
-        # Drift
+        # Precompute drift, weight, and boundary evaluations
+
+        # Drift (two columns: target, distractor)
         drift_params_tmp = {key: drift_params[key][k] for key in drift_params.keys()}
         drift[:, :] = drift_fun(t = t_s, **drift_params_tmp).astype(DTYPE)
+
+        # Weight on the decision variable
+        weight_params_tmp = {key: weight_params[key][k] for key in weight_params.keys()}
+        weight[:] = weight_fun(t = t_s, rng = weight_rng, **weight_params_tmp).astype(DTYPE)
 
         # Boundary
         boundary_params_tmp = {key: boundary_params[key][k] for key in boundary_params.keys()}
@@ -1379,7 +1203,7 @@ def ddm_flex_leak2(
             y_d = 0.0
             t_particle = 0.0 # reset time
             ix = 0 # reset boundary index
-            
+
             # Can improve with less checks
             if n == 0:
                 if k == 0:
@@ -1387,23 +1211,23 @@ def ddm_flex_leak2(
                     traj_view[0, 1] = y_t
                     traj_view[0, 2] = y_d
 
-            # Random walker
+            # Random walker; weight gates the momentary evidence of each leaky accumulator
             while (y >= (-1) * boundary_view[ix]) and (y <= boundary_view[ix]) and (t_particle <= deadline_tmp):
-                y_t += ((drift_view[ix, 0] - (g_t_view[k] * y_t)) * delta_t) + (sqrt_st/2 * gaussian_values[m])
-                y_d += ((drift_view[ix, 1] - (g_d_view[k] * y_d)) * delta_t) + (sqrt_st/2 * gaussian_values[m])
+                y_t += weight_view[ix] * (((drift_view[ix, 0] - (g_t_view[k] * y_t)) * delta_t) + (sqrt_st/2 * gaussian_values[m]))
+                y_d += weight_view[ix] * (((drift_view[ix, 1] - (g_d_view[k] * y_d)) * delta_t) + (sqrt_st/2 * gaussian_values[m]))
                 y = y_start + y_t + y_d
 
                 t_particle += delta_t
                 ix += 1
                 m += 1
-                
+
                 # Can improve with less checks
                 if n == 0:
                     if k == 0:
                         traj_view[ix, 0] = y
                         traj_view[ix, 1] = y_t
                         traj_view[ix, 2] = y_d
-                
+
                 # Can improve with less checks
                 if m == num_draws:
                     gaussian_values = draw_gaussian(num_draws)
@@ -1424,7 +1248,7 @@ def ddm_flex_leak2(
 
             if (rts_view[n, k, 0] >= deadline_view[k]) | (deadline_view[k] <= 0):
                 rts_view[n, k, 0] = -999
-    
+
     if return_option == 'full':
         return {'rts': rts, 'choices': choices,  'metadata': {'a': a,
                                                             'z': z,
@@ -1435,22 +1259,26 @@ def ddm_flex_leak2(
                                                             's': s,
                                                             **boundary_params,
                                                             **drift_params,
+                                                            **weight_params,
                                                             'delta_t': delta_t,
                                                             'max_t': max_t,
                                                             'n_samples': n_samples,
                                                             'n_trials': n_trials,
-                                                            'simulator': 'ddm_flex_leak',
+                                                            'simulator': 'ddm_flex_weight_dualleak',
                                                             'boundary_fun_type': boundary_fun.__name__,
-                                                            'drift_fun_type': boundary_fun.__name__,
+                                                            'drift_fun_type': drift_fun.__name__,
+                                                            'weight_fun_type': weight_fun.__name__,
                                                             'possible_choices': [-1, 1],
                                                             'trajectory': traj,
                                                             'drift': drift,
+                                                            'weight': weight,
                                                             'boundary': boundary}}
     elif return_option == 'minimal':
-        return {'rts': rts, 'choices': choices,  'metadata': {'simulator': 'ddm_flex_leak', 
+        return {'rts': rts, 'choices': choices,  'metadata': {'simulator': 'ddm_flex_weight_dualleak',
                                                              'possible_choices': [-1, 1],
                                                              'boundary_fun_type': boundary_fun.__name__,
-                                                             'drift_fun_type': boundary_fun.__name__,
+                                                             'drift_fun_type': drift_fun.__name__,
+                                                             'weight_fun_type': weight_fun.__name__,
                                                              'n_samples': n_samples,
                                                              'n_trials': n_trials,
                                                              }}

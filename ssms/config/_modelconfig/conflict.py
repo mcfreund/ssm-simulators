@@ -1,4 +1,18 @@
-"""Configuration for conflict models with dynamical drift."""
+"""Configuration for conflict models with dynamical drift.
+
+The stimflex family shares three ingredients, combined in each ``get_*_config`` below:
+
+* a **drift** base -- ``conflict_stimflex_drift`` (static boxcar), ``conflict_dsstimflex_drift``
+  (exponential cue-locked dynamics), or ``conflict_dsstimflexlin_drift`` (linear cue-locked
+  dynamics); ``conflict_stimflex_dual_drift`` is the two-column variant for dual-particle sims.
+* a **gate** on the decision variable -- ``logit_gate`` (discrete onset selection),
+  ``logitlin`` (onset-slope selection), or ``hazard_gate`` (continuous detection hazard).
+* a **simulator** -- ``ddm_flex_weight`` (single particle + gate) or ``ddm_flex_weight_dualleak``
+  (two leaky accumulators + gate).
+
+Param dicts are assembled from the small ``_*_params()`` helpers so a drift/gate base is
+specified once. ``conflict_ds``/``conflict_ds_angle`` are unrelated (no gate; ``ddm_flex``).
+"""
 
 import cssm
 from ssms.basic_simulators import boundary_functions as bf, drift_functions as df
@@ -56,68 +70,38 @@ def get_conflict_ds_angle_config():
     )
 
 
-def get_conflict_stimflexrel1_leak_config():
-    return _new_config(
-        name="conflict_stimflexrel1_leak",
-        param_dict=dict(
-            a=_new_param(2.0, 0.3, 3.0),
-            z=_new_param(0.5, 0.1, 0.9),
-            t=_new_param(1.0, 1e-3, 2.0),
-            vt=_new_param(2.0, 0.0, 5.0),
-            vd=_new_param(2.0, 0.0, 5.0),
-            tcoh=_new_param(0.5, -1.0, 1.0),
-            dcoh=_new_param(-0.5, -1.0, 1.0),
-            tonset=_new_param(0.0, 0.0, 1.0),
-            donset=_new_param(0.0, 0.0, 1.0),
-            toffset=_new_param(0.2, 0.0, 1.0),
-            doffset=_new_param(0.2, 0.0, 1.0),
-            g=_new_param(0.0, 0.0, 1.0),
-        ),
-        boundary_name="constant",
-        boundary=bf.constant,
-        drift_name="conflict_stimflexrel1_drift",
-        drift_fun=df.conflict_stimflexrel1_drift,
-        choices=[-1, 1],
-        n_particles=1,
-        simulator=cssm.ddm_flex_leak,
-    )
+# ---------------------------------------------------------------------------
+# Shared param-dict building blocks for the stimflex family
+# ---------------------------------------------------------------------------
 
-
-def get_conflict_stimflexrel1_leak2_config():
-    return _new_config(
-        name="conflict_stimflexrel1_leak2",
-        param_dict=dict(
-            a=_new_param(2.0, 0.3, 3.0),
-            z=_new_param(0.5, 0.1, 0.9),
-            t=_new_param(1.0, 1e-3, 2.0),
-            vt=_new_param(2.0, 0.0, 5.0),
-            vd=_new_param(2.0, 0.0, 5.0),
-            tcoh=_new_param(0.5, -1.0, 1.0),
-            dcoh=_new_param(-0.5, -1.0, 1.0),
-            tonset=_new_param(0.0, 0.0, 1.0),
-            donset=_new_param(0.0, 0.0, 1.0),
-            toffset=_new_param(0.2, 0.0, 1.0),
-            doffset=_new_param(0.2, 0.0, 1.0),
-            gt=_new_param(0.0, 0.0, 1.0),
-            gd=_new_param(0.0, 0.0, 1.0),
-        ),
-        boundary_name="constant",
-        boundary=bf.constant,
-        drift_name="conflict_stimflexrel1_dual_drift",
-        drift_fun=df.conflict_stimflexrel1_dual_drift,
-        choices=[-1, 1],
-        n_particles=1,
-        simulator=cssm.ddm_flex_leak2,
-    )
-
-
-def _dsstimflex_weight_param_dict():
-    """Shared param_dict for the master conflict_dsstimflex_weight model and its
-    angle variant."""
+def _core_params():
+    """Boundary separation, starting point, non-decision time."""
     return dict(
         a=_new_param(2.0, 0.3, 3.0),
         z=_new_param(0.5, 0.1, 0.9),
         t=_new_param(1.0, 1e-3, 2.0),
+    )
+
+
+def _stimflex_drift_params():
+    """Static (boxcar) drift rates + stimulus onset/offset/coherence + low-pass taus."""
+    return dict(
+        vt=_new_param(2.0, 0.0, 5.0),
+        vd=_new_param(2.0, 0.0, 5.0),
+        tcoh=_new_param(0.5, -1.0, 1.0),
+        dcoh=_new_param(-0.5, -1.0, 1.0),
+        tonset=_new_param(0.0, 0.0, 1.0),
+        donset=_new_param(0.0, 0.0, 1.0),
+        toffset=_new_param(0.2, 0.0, 1.0),
+        doffset=_new_param(0.2, 0.0, 1.0),
+        vtaurise=_new_param(0.05, 1e-3, 0.5),
+        vtaufall=_new_param(0.1, 1e-3, 0.5),
+    )
+
+
+def _dsstimflex_drift_params():
+    """Exponential cue-locked drift dynamics (init/slope/fixed-point) + stimulus + taus."""
+    return dict(
         tinit=_new_param(2.0, 0.0, 5.0),
         dinit=_new_param(2.0, 0.0, 5.0),
         tslope=_new_param(2.0, 0.01, 5.0),
@@ -128,205 +112,16 @@ def _dsstimflex_weight_param_dict():
         dcoh=_new_param(-0.5, -1.0, 1.0),
         tonset=_new_param(0.0, 0.0, 1.0),
         donset=_new_param(0.0, 0.0, 1.0),
+        toffset=_new_param(0.2, 0.0, 1.0),
+        doffset=_new_param(0.2, 0.0, 1.0),
         vtaurise=_new_param(0.05, 1e-3, 0.5),
         vtaufall=_new_param(0.1, 1e-3, 0.5),
-        wmin=_new_param(0.5, 0.0, 1.0),
-        wtaurise=_new_param(0.05, 1e-3, 0.5),
-        wtaufall=_new_param(0.1, 1e-3, 0.5),
     )
 
 
-def get_conflict_dsstimflex_dsweight_config():
-    return _new_config(
-        name="conflict_dsstimflex_dsweight",
-        param_dict=_dsstimflex_weight_param_dict() | dict(
-            winit=_new_param(0.0, 0.0, 1.0),
-            wslope=_new_param(0.15, 0.01, 1.0)),
-        boundary_name="constant",
-        boundary=bf.constant,
-        drift_name="conflict_dsstimflex_drift",
-        drift_fun=df.conflict_dsstimflex_drift,
-        weight_name="weight_window_ds",
-        weight_fun=df.weight_window_ds,
-        choices=[-1, 1],
-        n_particles=1,
-        simulator=cssm.ddm_flex_weight,
-    )
-
-
-def get_conflict_dsstimflex_probgate_config():
-    return _new_config(
-        name="conflict_dsstimflex_probgate",
-        param_dict=dict(
-            a=_new_param(2.0, 0.3, 3.0),
-            z=_new_param(0.5, 0.1, 0.9),
-            t=_new_param(1.0, 1e-3, 2.0),
-            tinit=_new_param(2.0, 0.0, 5.0),
-            dinit=_new_param(2.0, 0.0, 5.0),
-            tslope=_new_param(2.0, 0.01, 5.0),
-            dslope=_new_param(2.0, 0.01, 5.0),
-            tfixedp=_new_param(3.0, 0.0, 5.0),
-            dfixedp=_new_param(0.0, 0.0, 5.0),
-            tcoh=_new_param(0.5, -1.0, 1.0),
-            dcoh=_new_param(-0.5, -1.0, 1.0),
-            tonset=_new_param(0.0, 0.0, 1.0),
-            donset=_new_param(0.0, 0.0, 1.0),
-            vtaurise=_new_param(0.05, 1e-3, 0.5),
-            vtaufall=_new_param(0.1, 1e-3, 0.5),
-            wbaseline=_new_param(0, -10, 10),
-            wtarget=_new_param(0, -5, 5),
-            wdistractor=_new_param(0, -5, 5),
-        ),
-        boundary_name="constant",
-        boundary=bf.constant,
-        drift_name="conflict_dsstimflex_drift",
-        drift_fun=df.conflict_dsstimflex_drift,
-        weight_name="prob_gate",
-        weight_fun=df.prob_gate,
-        choices=[-1, 1],
-        n_particles=1,
-        simulator=cssm.ddm_flex_weight,
-    )
-
-
-def get_conflict_dsstimflex_parweight_config():
-    return _new_config(
-        name="conflict_dsstimflex_parweight",
-        param_dict=dict(
-            a=_new_param(2.0, 0.3, 3.0),
-            z=_new_param(0.5, 0.1, 0.9),
-            t=_new_param(1.0, 1e-3, 2.0),
-            tinit=_new_param(2.0, 0.0, 5.0),
-            dinit=_new_param(2.0, 0.0, 5.0),
-            tslope=_new_param(2.0, 0.01, 5.0),
-            dslope=_new_param(2.0, 0.01, 5.0),
-            tfixedp=_new_param(3.0, 0.0, 5.0),
-            dfixedp=_new_param(0.0, 0.0, 5.0),
-            tcoh=_new_param(0.5, -1.0, 1.0),
-            dcoh=_new_param(-0.5, -1.0, 1.0),
-            tonset=_new_param(0.0, 0.0, 1.0),
-            donset=_new_param(0.0, 0.0, 1.0),
-            vtaurise=_new_param(0.05, 1e-3, 0.5),
-            vtaufall=_new_param(0.1, 1e-3, 0.5),
-            wbaseline=_new_param(0, -10, 10),
-            wtarget=_new_param(0, -5, 5),
-            wdistractor=_new_param(0, -5, 5),
-        ),
-        boundary_name="constant",
-        boundary=bf.constant,
-        drift_name="conflict_dsstimflex_drift",
-        drift_fun=df.conflict_dsstimflex_drift,
-        weight_name="parametric_weight",
-        weight_fun=df.parametric_weight,
-        choices=[-1, 1],
-        n_particles=1,
-        simulator=cssm.ddm_flex_weight,
-    )
-
-
-def get_conflict_dsstimflex_parmix_config():
-    return _new_config(
-        name="conflict_dsstimflex_parmix",
-        param_dict=dict(
-            a=_new_param(2.0, 0.3, 3.0),
-            z=_new_param(0.5, 0.1, 0.9),
-            t=_new_param(1.0, 1e-3, 2.0),
-            tinit=_new_param(2.0, 0.0, 5.0),
-            dinit=_new_param(2.0, 0.0, 5.0),
-            tslope=_new_param(2.0, 0.01, 5.0),
-            dslope=_new_param(2.0, 0.01, 5.0),
-            tfixedp=_new_param(3.0, 0.0, 5.0),
-            dfixedp=_new_param(0.0, 0.0, 5.0),
-            tcoh=_new_param(0.5, -1.0, 1.0),
-            dcoh=_new_param(-0.5, -1.0, 1.0),
-            tonset=_new_param(0.0, 0.0, 1.0),
-            donset=_new_param(0.0, 0.0, 1.0),
-            vtaurise=_new_param(0.05, 1e-3, 0.5),
-            vtaufall=_new_param(0.1, 1e-3, 0.5),
-            wmin=_new_param(0.0, 0.0, 1.0),
-            wtaurise=_new_param(0.05, 1e-3, 0.5),
-            wtarget=_new_param(0, -10, 10),
-            wdistractor=_new_param(0, -10, 10),
-        ),
-        boundary_name="constant",
-        boundary=bf.constant,
-        drift_name="conflict_dsstimflex_drift",
-        drift_fun=df.conflict_dsstimflex_drift,
-        weight_name="parametric_mixture",
-        weight_fun=df.parametric_mixture,
-        choices=[-1, 1],
-        n_particles=1,
-        simulator=cssm.ddm_flex_weight,
-    )
-
-
-def get_conflict_dsstimflex_parmixdet_config():
-    """Deterministic variant of parmix: softmax-weighted average of the candidate
-    weight windows instead of a per-trial random draw (see df.parametric_mixture_det)."""
-    return _new_config(
-        name="conflict_dsstimflex_parmixdet",
-        param_dict=dict(
-            a=_new_param(2.0, 0.3, 3.0),
-            z=_new_param(0.5, 0.1, 0.9),
-            t=_new_param(1.0, 1e-3, 2.0),
-            tinit=_new_param(2.0, 0.0, 5.0),
-            dinit=_new_param(2.0, 0.0, 5.0),
-            tslope=_new_param(2.0, 0.01, 5.0),
-            dslope=_new_param(2.0, 0.01, 5.0),
-            tfixedp=_new_param(3.0, 0.0, 5.0),
-            dfixedp=_new_param(0.0, 0.0, 5.0),
-            tcoh=_new_param(0.5, -1.0, 1.0),
-            dcoh=_new_param(-0.5, -1.0, 1.0),
-            tonset=_new_param(0.0, 0.0, 1.0),
-            donset=_new_param(0.0, 0.0, 1.0),
-            vtaurise=_new_param(0.05, 1e-3, 0.5),
-            vtaufall=_new_param(0.1, 1e-3, 0.5),
-            wmin=_new_param(0.0, 0.0, 1.0),
-            wtaurise=_new_param(0.05, 1e-3, 0.5),
-            wtarget=_new_param(0, -10, 10),
-            wdistractor=_new_param(0, -10, 10),
-        ),
-        boundary_name="constant",
-        boundary=bf.constant,
-        drift_name="conflict_dsstimflex_drift",
-        drift_fun=df.conflict_dsstimflex_drift,
-        weight_name="parametric_mixture_det",
-        weight_fun=df.parametric_mixture_det,
-        choices=[-1, 1],
-        n_particles=1,
-        simulator=cssm.ddm_flex_weight,
-    )
-
-
-def get_conflict_dsstimflex_weight_config():
-    return _new_config(
-        name="conflict_dsstimflex_weight",
-        param_dict=_dsstimflex_weight_param_dict(),
-        boundary_name="constant",
-        boundary=bf.constant,
-        drift_name="conflict_dsstimflex_drift",
-        drift_fun=df.conflict_dsstimflex_drift,
-        weight_name="weight_window",
-        weight_fun=df.weight_window,
-        choices=[-1, 1],
-        n_particles=1,
-        simulator=cssm.ddm_flex_weight,
-    )
-
-
-def _dsstimflexlin_weight_param_dict():
-    """Shared param_dict for conflict_dsstimflexlin_weight: linear, cue-locked within-trial
-    drift dynamics in (level, tilt). ``level`` is the drift at the reference midpoint
-    (``maxstimoffset/2``) = onset-marginal mean drift; ``tilt`` in [-1, 1] is the
-    fractional slope of the cue-locked line (``level*(1-tilt)`` at the cue to
-    ``level*(1+tilt)`` at ``maxstimoffset``). ``tilt = 0`` is a static boxcar drift.
-    Tilt bounds are symmetric; |tilt| <= 1 keeps the drift non-negative over the
-    expressible span (a prior/bounds concern, not enforced in the drift function).
-    ``maxstimoffset`` is a supplied design constant (not inferred)."""
+def _dsstimflexlin_drift_params():
+    """Linear cue-locked drift dynamics in (level, tilt); ``maxstimoffset`` is supplied."""
     return dict(
-        a=_new_param(2.0, 0.3, 3.0),
-        z=_new_param(0.5, 0.1, 0.9),
-        t=_new_param(1.0, 1e-3, 2.0),
         tlevel=_new_param(2.0, 0.0, 20.0),
         dlevel=_new_param(2.0, 0.0, 20.0),
         ttilt=_new_param(0.0, -1.0, 1.0),
@@ -335,75 +130,146 @@ def _dsstimflexlin_weight_param_dict():
         dcoh=_new_param(-0.5, -1.0, 1.0),
         tonset=_new_param(0.0, 0.0, 1.0),
         donset=_new_param(0.0, 0.0, 1.0),
+        toffset=_new_param(0.2, 0.0, 1.0),
+        doffset=_new_param(0.2, 0.0, 1.0),
         maxstimoffset=_new_param(1.0 + 16 / 60, 0.0, 20.0),
         vtaurise=_new_param(0.05, 1e-3, 0.5),
         vtaufall=_new_param(0.1, 1e-3, 0.5),
-        wmin=_new_param(0.5, 0.0, 1.0),
-        wtaurise=_new_param(0.05, 1e-3, 0.5),
-        wtaufall=_new_param(0.1, 1e-3, 0.5),
     )
 
 
-def get_conflict_dsstimflexlin_weight_config():
+def _logit_gate_params():
+    """Discrete onset-selection gate: leak floor, rise time, target-vs-distractor logit."""
+    return dict(
+        wmin=_new_param(0.5, 0.0, 1.0),
+        wtaurise=_new_param(0.05, 1e-3, 0.5),
+        wtarget=_new_param(0.0, -10.0, 10.0),
+    )
+
+
+def _logitlin_gate_params():
+    """logit_gate + per-stimulus onset slopes (raw cue-locked onset)."""
+    return _logit_gate_params() | dict(
+        wtargetslope=_new_param(0.0, -10.0, 10.0),
+        wdistractorslope=_new_param(0.0, -10.0, 10.0),
+    )
+
+
+def _hazard_gate_params():
+    """Continuous detection hazard: log baseline + per-stimulus log-hazard-ratios + gate shape."""
+    return dict(
+        wbaseline=_new_param(0.0, -10.0, 10.0),
+        wtarget=_new_param(0.0, -5.0, 5.0),
+        wdistractor=_new_param(0.0, -5.0, 5.0),
+        wmin=_new_param(0.5, 0.0, 1.0),
+        wtaurise=_new_param(0.05, 1e-3, 0.5),
+    )
+
+
+# ---------------------------------------------------------------------------
+# ddm_flex_weight models (single particle + decision-variable gate)
+# ---------------------------------------------------------------------------
+
+def get_conflict_stimflex_logit_config():
     return _new_config(
-        name="conflict_dsstimflexlin_weight",
-        param_dict=_dsstimflexlin_weight_param_dict(),
+        name="conflict_stimflex_logit",
+        param_dict=_core_params() | _stimflex_drift_params() | _logit_gate_params(),
+        boundary_name="constant",
+        boundary=bf.constant,
+        drift_name="conflict_stimflex_drift",
+        drift_fun=df.conflict_stimflex_drift,
+        weight_name="logit_gate",
+        weight_fun=df.logit_gate,
+        choices=[-1, 1],
+        n_particles=1,
+        simulator=cssm.ddm_flex_weight,
+    )
+
+
+def get_conflict_stimflex_logitlin_config():
+    return _new_config(
+        name="conflict_stimflex_logitlin",
+        param_dict=_core_params() | _stimflex_drift_params() | _logitlin_gate_params(),
+        boundary_name="constant",
+        boundary=bf.constant,
+        drift_name="conflict_stimflex_drift",
+        drift_fun=df.conflict_stimflex_drift,
+        weight_name="logitlin",
+        weight_fun=df.logitlin,
+        choices=[-1, 1],
+        n_particles=1,
+        simulator=cssm.ddm_flex_weight,
+    )
+
+
+def get_conflict_dsstimflex_logit_config():
+    return _new_config(
+        name="conflict_dsstimflex_logit",
+        param_dict=_core_params() | _dsstimflex_drift_params() | _logit_gate_params(),
+        boundary_name="constant",
+        boundary=bf.constant,
+        drift_name="conflict_dsstimflex_drift",
+        drift_fun=df.conflict_dsstimflex_drift,
+        weight_name="logit_gate",
+        weight_fun=df.logit_gate,
+        choices=[-1, 1],
+        n_particles=1,
+        simulator=cssm.ddm_flex_weight,
+    )
+
+
+def get_conflict_dsstimflexlin_logit_config():
+    return _new_config(
+        name="conflict_dsstimflexlin_logit",
+        param_dict=_core_params() | _dsstimflexlin_drift_params() | _logit_gate_params(),
         boundary_name="constant",
         boundary=bf.constant,
         drift_name="conflict_dsstimflexlin_drift",
         drift_fun=df.conflict_dsstimflexlin_drift,
-        weight_name="weight_window",
-        weight_fun=df.weight_window,
+        weight_name="logit_gate",
+        weight_fun=df.logit_gate,
         choices=[-1, 1],
         n_particles=1,
         simulator=cssm.ddm_flex_weight,
     )
 
 
-def get_conflict_dsstimflex_weight_angle_config():
+def get_conflict_stimflex_hazard_config():
     return _new_config(
-        name="conflict_dsstimflex_weight_angle",
-        param_dict=_dsstimflex_weight_param_dict() | dict(
-            theta=_new_param(0.0, 0.0, 1.3),
-        ),
-        boundary_name="angle",
-        boundary=bf.angle,
-        drift_name="conflict_dsstimflex_drift",
-        drift_fun=df.conflict_dsstimflex_drift,
-        weight_name="weight_window",
-        weight_fun=df.weight_window,
+        name="conflict_stimflex_hazard",
+        param_dict=_core_params() | _stimflex_drift_params() | _hazard_gate_params(),
+        boundary_name="constant",
+        boundary=bf.constant,
+        drift_name="conflict_stimflex_drift",
+        drift_fun=df.conflict_stimflex_drift,
+        weight_name="hazard_gate",
+        weight_fun=df.hazard_gate,
         choices=[-1, 1],
         n_particles=1,
         simulator=cssm.ddm_flex_weight,
     )
 
 
-def get_conflict_dsstimflex_leak2_config():
+# ---------------------------------------------------------------------------
+# ddm_flex_weight_dualleak models (two leaky accumulators + gate)
+# ---------------------------------------------------------------------------
+
+def get_conflict_stimflex_logit_dualleak_config():
     return _new_config(
-        name="conflict_dsstimflex_leak2",
-        param_dict=dict(
-            a=_new_param(2.0, 0.3, 3.0),
-            z=_new_param(0.5, 0.1, 0.9),
-            t=_new_param(1.0, 1e-3, 2.0),
-            tinit=_new_param(2.0, 0.0, 5.0),
-            dinit=_new_param(2.0, 0.0, 5.0),
-            tslope=_new_param(2.0, 0.01, 5.0),
-            dslope=_new_param(2.0, 0.01, 5.0),
-            tfixedp=_new_param(3.0, 0.0, 5.0),
-            tcoh=_new_param(0.5, -1.0, 1.0),
-            dcoh=_new_param(-0.5, -1.0, 1.0),
-            tonset=_new_param(0.0, 0.0, 1.0),
-            donset=_new_param(0.0, 0.0, 1.0),
-            toffset=_new_param(0.2, 0.0, 1.0),
-            doffset=_new_param(0.2, 0.0, 1.0),
-            gt=_new_param(0.0, 0.0, 1.0),
-            gd=_new_param(0.0, 0.0, 1.0),
+        name="conflict_stimflex_logit_dualleak",
+        param_dict=(
+            _core_params()
+            | dict(gt=_new_param(0.0, 0.0, 1.0), gd=_new_param(0.0, 0.0, 1.0))
+            | _stimflex_drift_params()
+            | _logit_gate_params()
         ),
         boundary_name="constant",
         boundary=bf.constant,
-        drift_name="conflict_dsstimflex_dual_drift",
-        drift_fun=df.conflict_dsstimflex_dual_drift,
+        drift_name="conflict_stimflex_dual_drift",
+        drift_fun=df.conflict_stimflex_dual_drift,
+        weight_name="logit_gate",
+        weight_fun=df.logit_gate,
         choices=[-1, 1],
         n_particles=1,
-        simulator=cssm.ddm_flex_leak2,
+        simulator=cssm.ddm_flex_weight_dualleak,
     )
