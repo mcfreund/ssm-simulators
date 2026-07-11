@@ -94,7 +94,6 @@ def _stimflex_drift_params():
         donset=_new_param(0.0, 0.0, 1.0),
         toffset=_new_param(0.2, 0.0, 1.0),
         doffset=_new_param(0.2, 0.0, 1.0),
-        vtaurise=_new_param(0.05, 1e-3, 0.5),
         vtaufall=_new_param(0.1, 1e-3, 0.5),
     )
 
@@ -114,7 +113,6 @@ def _dsstimflex_drift_params():
         donset=_new_param(0.0, 0.0, 1.0),
         toffset=_new_param(0.2, 0.0, 1.0),
         doffset=_new_param(0.2, 0.0, 1.0),
-        vtaurise=_new_param(0.05, 1e-3, 0.5),
         vtaufall=_new_param(0.1, 1e-3, 0.5),
     )
 
@@ -133,7 +131,6 @@ def _dsstimflexlin_drift_params():
         toffset=_new_param(0.2, 0.0, 1.0),
         doffset=_new_param(0.2, 0.0, 1.0),
         maxstimoffset=_new_param(1.0 + 16 / 60, 0.0, 20.0),
-        vtaurise=_new_param(0.05, 1e-3, 0.5),
         vtaufall=_new_param(0.1, 1e-3, 0.5),
     )
 

@@ -253,6 +253,20 @@ def boxcar(
     return pulse
 
 
+def causal_lowpass(t: np.ndarray, raw: np.ndarray, tau: float) -> np.ndarray:
+    """Causal first-order (EMA) low-pass of ``raw`` with time constant ``tau``.
+
+    ``y[n] = (1 - a)*y[n-1] + a*x[n]`` with ``a = 1 - exp(-dt/tau)``, on a uniform time
+    grid. ``tau <= 0`` is the identity (no smoothing, sharp onset) -- the ``tau = 0``
+    limit, handled explicitly to avoid a divide-by-zero.
+    """
+    if tau <= 0:
+        return np.array(raw, dtype=float)
+    dt = t[1] - t[0] if t.size > 1 else 0.1
+    a = 1.0 - np.exp(-dt / tau)
+    return lfilter([a], [1.0, -(1.0 - a)], raw)
+
+
 def piecewise_lowpass(
     t: np.ndarray,
     raw: np.ndarray,
@@ -260,12 +274,12 @@ def piecewise_lowpass(
     tau_rise: float,
     tau_fall: float,
 ) -> np.ndarray:
-    """Causal first-order low-pass of ``raw`` with region-dependent time constants.
+    """Causal low-pass of ``raw`` with region-dependent time constants.
 
-    ``tau_rise`` governs the response while the stimulus is on (``t <= offset``);
-    ``tau_fall`` governs the post-offset tail (``t > offset``), where ``raw`` has
-    dropped to 0 so the response relaxes exponentially from its offset value. Assumes
-    a uniform time grid.
+    The on-window (``t <= offset``) is a causal EMA with time constant ``tau_rise`` (see
+    :func:`causal_lowpass`; ``tau_rise = 0`` gives a sharp, unsmoothed onset). The
+    post-offset tail (``t > offset``), where ``raw`` has dropped to 0, relaxes exponentially
+    from the offset value with time constant ``tau_fall``. Assumes a uniform time grid.
 
     Arguments
     ---------
@@ -276,18 +290,17 @@ def piecewise_lowpass(
         offset: float
             Boundary between the rise region (<=) and the fall region (>).
         tau_rise, tau_fall: float
-            Time constants for the two regions.
+            Time constants for the two regions (``tau_rise = 0`` -> no onset smoothing).
     Returns
     -------
         np.ndarray: filtered signal, same length as ``t``.
     """
-    dt = t[1] - t[0] if t.size > 1 else 0.1
     on = t <= offset
-    y = np.zeros_like(raw)
-    a_r = 1.0 - np.exp(-dt / tau_rise)
-    y[on] = lfilter([a_r], [1.0, -(1.0 - a_r)], raw[on])
+    y = np.zeros_like(raw, dtype=float)
+    y[on] = causal_lowpass(t, raw[on], tau_rise)
     off = ~on
     if off.any():
+        dt = t[1] - t[0] if t.size > 1 else 0.1
         k = np.arange(1, off.sum() + 1)
         y[off] = y[on][-1] * np.exp(-k * dt / tau_fall)
     return y
@@ -351,12 +364,11 @@ def conflict_stimflex_drift(
     donset: float = 0,
     toffset: float | None = None,
     doffset: float | None = None,
-    vtaurise: float = 0.05,
     vtaufall: float = 0.1,
     sum_drifts: bool = True,
 ) -> np.ndarray:
     """Drift function for conflict task with static drift rates and stimuli with
-    potentially variable onset/duration and exponential rise/fall.
+    potentially variable onset/duration and an exponential post-offset tail.
 
     Arguments:
     ---------
@@ -378,8 +390,9 @@ def conflict_stimflex_drift(
         toffset, doffset: float or None
             Offset time of the stimulus coherence pulse. If None, the pulse
             lasts until the end of the trial.
-        vtaurise, vtaufall: float
-            Time constants for the exponential rise/fall of the stimulus envelope.
+        vtaufall: float
+            Time constant for the exponential post-offset tail of the stimulus envelope.
+            (Onset is sharp: the low-pass rise time is fixed to 0.)
         sum_drifts: bool
             If True, the drift contributions from target and distractor
             are summed to produce a single drift timecourse. If False,
@@ -396,8 +409,8 @@ def conflict_stimflex_drift(
         toffset = np.max(t)
     if doffset is None:
         doffset = np.max(t)
-    tdrift = filtered_pulse(t, tcoh, vt, tonset, toffset, vtaurise, vtaufall)
-    ddrift = filtered_pulse(t, dcoh, vd, donset, doffset, vtaurise, vtaufall)
+    tdrift = filtered_pulse(t, tcoh, vt, tonset, toffset, tau_rise=0.0, tau_fall=vtaufall)
+    ddrift = filtered_pulse(t, dcoh, vd, donset, doffset, tau_rise=0.0, tau_fall=vtaufall)
     if sum_drifts:
         return tdrift + ddrift
     else:
@@ -430,7 +443,6 @@ def conflict_dsstimflex_drift(
     donset: float = 0,
     toffset: float | None = None,
     doffset: float | None = None,
-    vtaurise: float = 0.05,
     vtaufall: float = 0.1,
     sum_drifts: bool = True
 ) -> np.ndarray:
@@ -439,7 +451,7 @@ def conflict_dsstimflex_drift(
     Each input's drift is ``lowpass(boxcar(coh) * weight)`` (see :func:`filtered_pulse`),
     where the within-trial ``weight`` follows an independent saturating-exponential
     dynamic (``ds_support_analytic``). The boxcar gates the weight to the on-window; the
-    causal filter (``vtaurise``/``vtaufall``) smooths onset and the post-offset tail.
+    onset is sharp (rise time fixed to 0) and the post-offset tail relaxes with ``vtaufall``.
 
     Arguments:
     ---------
@@ -466,8 +478,8 @@ def conflict_dsstimflex_drift(
             Onset time of the target stimulus coherence.
         donset: float
             Onset time of the distractor stimulus coherence.
-        vtaurise, vtaufall: float
-            Time constants for the exponential rise/fall of the stimulus envelope.
+        vtaufall: float
+            Time constant for the exponential post-offset tail (onset is sharp: rise = 0).
     """
     if t is None:
         t = np.arange(0, 20, 0.1)
@@ -477,10 +489,10 @@ def conflict_dsstimflex_drift(
         doffset = np.max(t)
     tdrift = filtered_pulse(
         t, tcoh, ds_support_analytic(t=t, init_p=tinit, fix_point=tfixedp, slope=tslope),
-        tonset, toffset, vtaurise, vtaufall)
+        tonset, toffset, tau_rise=0.0, tau_fall=vtaufall)
     ddrift = filtered_pulse(
         t, dcoh, ds_support_analytic(t=t, init_p=dinit, fix_point=dfixedp, slope=dslope),
-        donset, doffset, vtaurise, vtaufall)
+        donset, doffset, tau_rise=0.0, tau_fall=vtaufall)
     if sum_drifts:
         return tdrift + ddrift
     else:
@@ -500,7 +512,6 @@ def conflict_dsstimflexlin_drift(
     toffset: float | None = None,
     doffset: float | None = None,
     maxstimoffset: float = 1.0,
-    vtaurise: float = 0.05,
     vtaufall: float = 0.1,
     sum_drifts: bool = True,
 ) -> np.ndarray:
@@ -508,8 +519,8 @@ def conflict_dsstimflexlin_drift(
 
     Each input's drift is ``lowpass(boxcar(coh) * linear_scale(level, tilt))`` (see
     :func:`filtered_pulse`, :func:`linear_scale`): a boxcar for the stimulus pulse gating
-    a linear latent trajectory in (``level``, ``tilt``), then a causal piecewise low-pass
-    filter (``vtaurise``/``vtaufall``). The line is in *absolute (cue-locked) time*, like
+    a linear latent trajectory in (``level``, ``tilt``), then a causal low-pass with a
+    sharp onset (rise = 0) and a ``vtaufall`` post-offset tail. The line is in *absolute (cue-locked) time*, like
     the exponential ``ds_support_analytic``, so variable onsets sample different segments
     of one latent trajectory -- tilt shows up mostly as an onset-graded (across-trial)
     effect, plus a small within-window slope. ``tilt = 0`` recovers a static (boxcar)
@@ -536,8 +547,8 @@ def conflict_dsstimflexlin_drift(
             Latest a stimulus can turn off across the design (max onset + duration); the
             reference span normalizing the cue-locked line. Supplied by the model, not
             inferred (cf. tonset/donset).
-        vtaurise, vtaufall: float
-            Time constants for the low-pass rise (on-window) / fall (post-offset tail).
+        vtaufall: float
+            Time constant for the post-offset tail (onset is sharp: rise = 0).
     """
     if t is None:
         t = np.arange(0, 20, 0.1)
@@ -547,10 +558,10 @@ def conflict_dsstimflexlin_drift(
         doffset = np.max(t)
     tdrift = filtered_pulse(
         t, tcoh, linear_scale(t, tlevel, ttilt, maxstimoffset),
-        tonset, toffset, vtaurise, vtaufall)
+        tonset, toffset, tau_rise=0.0, tau_fall=vtaufall)
     ddrift = filtered_pulse(
         t, dcoh, linear_scale(t, dlevel, dtilt, maxstimoffset),
-        donset, doffset, vtaurise, vtaufall)
+        donset, doffset, tau_rise=0.0, tau_fall=vtaufall)
     if sum_drifts:
         return tdrift + ddrift
     else:
@@ -567,13 +578,14 @@ def soft_gate(
 
     Before ``onset`` the gate sits at its leaky-closed floor ``wmin``; at ``onset`` it
     transitions toward 1 with rise time ``tau_rise`` (a causal low-pass of a step to
-    ``1 - wmin``) and does not fall again (``tau_fall = 1e12``). If ``onset`` is beyond
-    the time grid (e.g. ``np.inf`` from :func:`sample_hazard_onset`, i.e. the gate never
-    opens) the boxcar is all-zero and the gate stays at ``wmin`` throughout. Shared by
+    ``1 - wmin``) and never falls back -- so this is a pure :func:`causal_lowpass` of the
+    step, with no fall region (no ``tau_fall``). If ``onset`` is beyond the time grid
+    (e.g. ``np.inf`` from :func:`sample_hazard_onset`, i.e. the gate never opens) the
+    boxcar is all-zero and the gate stays at ``wmin`` throughout. Shared by
     :func:`hazard_gate`, :func:`logit_gate`, and :func:`logitlin` as the open-transition.
     """
     raw = boxcar(t, onset, t.max(), 1 - wmin)
-    return piecewise_lowpass(t, raw, t.max(), tau_rise, 1e12) + wmin
+    return causal_lowpass(t, raw, tau_rise) + wmin
 
 
 def sample_hazard_onset(t, rate, rng):
