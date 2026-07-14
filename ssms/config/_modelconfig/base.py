@@ -81,6 +81,25 @@ drift_config = {
             "vtaufall",
         ],
     },
+    "conflict_dsstimflexpwlin_drift": {
+        "fun": df.conflict_dsstimflexpwlin_drift,
+        "params": [
+            "tstart",
+            "dstart",
+            "tplateau",
+            "dplateau",
+            "ttau",
+            "dtau",
+            "tcoh",
+            "dcoh",
+            "tonset",
+            "donset",
+            "toffset",
+            "doffset",
+            "maxstimoffset",
+            "vtaufall",
+        ],
+    },
     "conflict_stimflex_drift": {
         "fun": df.conflict_stimflex_drift,
         "params": [
@@ -126,12 +145,16 @@ weight_config = {
         "fun": df.hazard_gate,
         "params": ["tonset", "toffset", "tcoh", "donset", "doffset", "dcoh", "wbaseline", "wtarget", "wdistractor", "wmin", "wtaurise"],
     },
+    "hazard2": {
+        "fun": df.hazard2,
+        "params": ["tonset", "toffset", "tcoh", "donset", "doffset", "dcoh", "wbaseline", "wtarget", "wdistractor", "wmin", "wtaurise", "wtauonset"],
+    },
     "logit_gate": {
         "fun": df.logit_gate,
         "params": ["tonset", "donset", "wmin", "wtaurise", "wtarget"],
     },
-    "logitlin": {
-        "fun": df.logitlin,
-        "params": ["tonset", "donset", "wmin", "wtaurise", "wtarget", "wtargetslope", "wdistractorslope"],
+    "softmax_gate": {
+        "fun": df.softmax_gate,
+        "params": ["tonset", "donset", "wmin", "wtaurise", "wtarget", "wdistractor"],
     },
 }

@@ -333,6 +333,34 @@ def linear_scale(
     return level * (1.0 + tilt * (2.0 * u - 1.0))
 
 
+def pwlin_scale(
+    t: np.ndarray,
+    vstart: float,
+    vplateau: float,
+    tau: float,
+    maxstimoffset: float,
+) -> np.ndarray:
+    """Cue-relative ramp-then-plateau drift-weight (piecewise-linear analogue of ``linear_scale``).
+
+    A two-segment line in absolute (cue-locked) time ``t``: it ramps linearly from ``vstart`` at
+    the cue to ``vplateau`` at the knot, then holds ``vplateau`` (a coarse saturating
+    growth/decay). With ``u = t / maxstimoffset`` the fraction of the expressible span elapsed and
+    the knot ``tau`` in that same normalized time::
+
+        u    = t / maxstimoffset                          # fraction of the expressible span elapsed
+        v(t) = vstart + (vplateau - vstart) * min(u, tau) / tau
+
+    Like :func:`linear_scale`, the line is cue-locked, so different stimulus onsets sample
+    different segments of the *same* latent trajectory (steep during the ramp ``u < tau``, flat
+    after). ``vstart == vplateau`` is static drift. This is a design-agnostic *evaluator*: the
+    (level, tilt) -> (vstart, vplateau) reparameterization that makes the onset-marginal mean
+    drift equal ``level`` for any tilt/knot depends on the onset design and is done model-side
+    (pan), not here. Pair with :func:`boxcar`/:func:`filtered_pulse` to gate it to the pulse.
+    """
+    u = t / maxstimoffset
+    return vstart + (vplateau - vstart) * np.minimum(u, tau) / tau
+
+
 def filtered_pulse(
     t: np.ndarray,
     coh: float,
@@ -568,6 +596,82 @@ def conflict_dsstimflexlin_drift(
         return np.column_stack((tdrift, ddrift))
 
 
+def conflict_dsstimflexpwlin_drift(
+    t: np.ndarray | None,
+    tstart: float = 1.0,
+    dstart: float = 1.0,
+    tplateau: float = 1.0,
+    dplateau: float = 1.0,
+    ttau: float = 0.5,
+    dtau: float = 0.5,
+    tcoh: float = 1.0,
+    dcoh: float = 1.0,
+    tonset: float = 0,
+    donset: float = 0,
+    toffset: float | None = None,
+    doffset: float | None = None,
+    maxstimoffset: float = 1.0,
+    vtaufall: float = 0.1,
+    sum_drifts: bool = True,
+) -> np.ndarray:
+    """Conflict drift with *piecewise-linear* (ramp-then-plateau) cue-locked within-trial dynamics.
+
+    The within-trial analogue of :func:`conflict_dsstimflexlin_drift`, with the linear line
+    replaced by a ramp-then-plateau (a coarse saturating trajectory). Each input's drift is
+    ``lowpass(boxcar(coh) * pwlin_scale(vstart, vplateau, tau))`` (see :func:`pwlin_scale`,
+    :func:`filtered_pulse`): a boxcar for the stimulus pulse gating the ramp-plateau latent
+    trajectory in absolute (cue-locked) time, then a causal low-pass with a sharp onset (rise = 0)
+    and a ``vtaufall`` post-offset tail. The line is cue-locked, so variable onsets sample
+    different segments of one saturating trajectory (steep during the ramp, flat after the knot).
+    ``vstart == vplateau`` recovers a static (boxcar) drift, matching
+    :func:`conflict_stimflex_drift` with the drift rate set to that common value.
+
+    The endpoints ``*start``/``*plateau`` and knot ``*tau`` are the raw *evaluator* parameters;
+    the cognitive (level, tilt) parameterization -- onset-marginal mean drift = ``level`` for any
+    tilt/knot -- is applied model-side (pan ``make_theta``), since the level/tilt -> endpoint map
+    depends on the onset design. See ``src/ssm/scratch/drift-dynamics-parameterization.md``.
+
+    Arguments:
+    ---------
+        t: np.ndarray
+            Timepoints at which to evaluate the drift. Usually np.arange() of some sort.
+        tstart, dstart: float
+            Target/distractor drift at the cue (``u = 0``, the ramp start).
+        tplateau, dplateau: float
+            Target/distractor drift on the plateau (``u >= tau``, after saturation).
+        ttau, dtau: float
+            Target/distractor knot: fraction of the expressible span
+            (``u = t / maxstimoffset``) at which the ramp switches to the plateau.
+        tcoh, dcoh: float
+            Coherence of the target/distractor stimulus when 'on'.
+        tonset, donset: float
+            Onset time of the target/distractor stimulus.
+        toffset, doffset: float
+            Offset time of the target/distractor stimulus.
+        maxstimoffset: float
+            Latest a stimulus can turn off across the design (max onset + duration); the
+            reference span normalizing the cue-locked line. Supplied by the model, not inferred.
+        vtaufall: float
+            Time constant for the post-offset tail (onset is sharp: rise = 0).
+    """
+    if t is None:
+        t = np.arange(0, 20, 0.1)
+    if toffset is None:
+        toffset = np.max(t)
+    if doffset is None:
+        doffset = np.max(t)
+    tdrift = filtered_pulse(
+        t, tcoh, pwlin_scale(t, tstart, tplateau, ttau, maxstimoffset),
+        tonset, toffset, tau_rise=0.0, tau_fall=vtaufall)
+    ddrift = filtered_pulse(
+        t, dcoh, pwlin_scale(t, dstart, dplateau, dtau, maxstimoffset),
+        donset, doffset, tau_rise=0.0, tau_fall=vtaufall)
+    if sum_drifts:
+        return tdrift + ddrift
+    else:
+        return np.column_stack((tdrift, ddrift))
+
+
 def soft_gate(
     t: np.ndarray,
     onset: float,
@@ -582,7 +686,7 @@ def soft_gate(
     step, with no fall region (no ``tau_fall``). If ``onset`` is beyond the time grid
     (e.g. ``np.inf`` from :func:`sample_hazard_onset`, i.e. the gate never opens) the
     boxcar is all-zero and the gate stays at ``wmin`` throughout. Shared by
-    :func:`hazard_gate`, :func:`logit_gate`, and :func:`logitlin` as the open-transition.
+    :func:`hazard_gate` and :func:`logit_gate` as the open-transition.
     """
     raw = boxcar(t, onset, t.max(), 1 - wmin)
     return causal_lowpass(t, raw, tau_rise) + wmin
@@ -654,6 +758,61 @@ def hazard_gate(
     return soft_gate(t, t_open, wtaurise, wmin)
 
 
+def hazard2(
+    t: np.ndarray | None,
+    tonset: float = 0.0,
+    toffset: float = 1.0,
+    tcoh: float = 1.0,
+    donset: float = 0.0,
+    doffset: float = 1.0,
+    dcoh: float = 1.0,
+    wbaseline: float = 0,
+    wtarget: float = 1,
+    wdistractor: float = 1,
+    wtauonset: float = 0.05,
+    wmin: float = 0,
+    wtaurise: float = 0.05,
+    rng=None,  # injected by cssm; unseeded fallback only when called standalone
+) -> np.ndarray:
+    """Focal-onset variant of :func:`hazard_gate`.
+
+    Same log-linear (proportional-hazards) opening process, but each stimulus's coherence
+    energy is a **short box of length ``wtauonset`` right after its onset** rather than the
+    full ``[onset, offset]`` boxcar::
+
+        rate(t) = exp( |tcoh|*wtarget * 1{tonset <= t <= tonset + wtauonset}
+                     + |dcoh|*wdistractor * 1{donset <= t <= donset + wtauonset}
+                     + wbaseline )
+
+    So a stimulus can only drive gate opening in the first ``wtauonset`` seconds after it
+    appears (a phasic onset response); past that window it no longer raises the rate. This
+    concentrates stimulus-driven opening near onset, so onset-locked opening must be carried by
+    a high ``wtarget`` / short latency rather than by diffuse within-window capture -- pair with
+    a low ``wbaseline`` so late opening is not simply reabsorbed as spontaneous. ``toffset`` /
+    ``doffset`` are accepted for signature parity with :func:`hazard_gate` but unused here (the
+    energy window is set by ``wtauonset``, not the stimulus offset). Reduces to
+    :func:`hazard_gate` in the limit ``wtauonset -> stimulus duration``.
+
+    Arguments
+    ---------
+        t, tonset, tcoh, donset, dcoh, wbaseline, wtarget, wdistractor, wmin, wtaurise, rng:
+            As in :func:`hazard_gate`.
+        toffset, doffset: float
+            Accepted for parity with :func:`hazard_gate`; not used (window set by ``wtauonset``).
+        wtauonset: float
+            Length (s) of the post-onset window over which each stimulus raises the rate.
+    """
+    if t is None:
+        t = np.arange(0, 20, 0.1)
+    tenergy = boxcar(t, tonset, tonset + wtauonset, np.abs(tcoh))
+    denergy = boxcar(t, donset, donset + wtauonset, np.abs(dcoh))
+    rate = np.exp(tenergy * wtarget + denergy * wdistractor + wbaseline)
+    if rng is None:
+        rng = np.random.default_rng()
+    t_open = sample_hazard_onset(t, rate, rng)
+    return soft_gate(t, t_open, wtaurise, wmin)
+
+
 def logit_gate(
     t: np.ndarray | None,
     tonset: float = 0.0,
@@ -699,45 +858,45 @@ def logit_gate(
     return soft_gate(t, onset, wtaurise, wmin)
 
 
-def logitlin(
+def softmax_gate(
     t: np.ndarray | None,
     tonset: float = 0.0,
     donset: float = 0.0,
     wmin: float = 0.0,
     wtaurise: float = 0.05,
-    wtarget: float = 0.0,
-    wtargetslope: float = 0.0,
-    wdistractorslope: float = 0.0,
+    wtarget: float = 0,
+    wdistractor: float = 0,
     rng=None,  # injected by cssm; unseeded fallback only when called standalone
 ) -> np.ndarray:
-    """Onset-time-dependent variant of :func:`logit_gate`.
+    """Discrete onset-selection gate over 3 candidate opening times (generalizes :func:`logit_gate`).
 
-    Same 2-class onset selection (target vs distractor), but each option's selection logit
-    varies linearly with *its own* onset time (raw, cue-locked)::
+    A one-shot attentional-capture gate that always opens, at one of *three* candidate times,
+    chosen by a 3-class softmax::
 
-        logit(target)     = wtarget + wtargetslope * tonset
-        logit(distractor) =           wdistractorslope * donset   (distractor = reference)
+        first = min(tonset, donset)                                  # earliest onset (reference)
+        p([first, target, distractor]) = softmax([0, wtarget, wdistractor])
 
-    This is the general 2-option linear-in-onset model: an identity intercept (``wtarget``)
-    plus one slope per stimulus. A shared negative slope encodes primacy (earlier onset
-    favored); differing slopes encode stimulus-specific timing sensitivity. Unlike
-    :func:`logit_gate`, capture propensity now depends on *when* each stimulus appeared --
-    identified from across-trial onset/SOA variation (needs asynchronous onsets).
+    The reference class ``first`` opens as soon as *any* stimulus appears (identity-agnostic
+    capture); ``wtarget`` / ``wdistractor`` are the log-odds of instead holding out to open
+    specifically at the target / distractor onset, relative to opening at the first onset. The
+    chosen onset is passed to :func:`soft_gate` (latch open from ``wmin`` toward 1 with rise time
+    ``wtaurise``). Reduces to opening at the shared onset when ``tonset == donset`` (all three
+    candidates coincide, a no-op); needs asynchronous onsets to be identifiable.
 
     Arguments
     ---------
         t: np.ndarray
             Timepoints (uniform grid).
         tonset, donset: float
-            Candidate opening times (target/distractor onsets).
+            Target/distractor onsets. ``min(tonset, donset)`` is the reference candidate.
         wmin: float
             Leaky-closed floor before opening.
         wtaurise: float
             Rise time of the open transition.
         wtarget: float
-            Target-vs-distractor selection intercept (log-odds at onset 0).
-        wtargetslope, wdistractorslope: float
-            Slope of the target/distractor selection logit on its own (raw) onset time.
+            Log-odds of opening at the target onset (vs the first-onset reference).
+        wdistractor: float
+            Log-odds of opening at the distractor onset (vs the first-onset reference).
         rng: np.random.Generator
             Injected by cssm; unseeded fallback only when called standalone.
     """
@@ -745,9 +904,8 @@ def logitlin(
         t = np.arange(0, 20, 0.005)
     if rng is None:
         rng = np.random.default_rng()
-    logit_t = wtarget + wtargetslope * tonset
-    logit_d = wdistractorslope * donset
-    onset = rng.choice([tonset, donset], p = softmax([logit_t, logit_d]))
+    onset = rng.choice([min(tonset, donset), tonset, donset],
+                       p = softmax([0, wtarget, wdistractor]))
     return soft_gate(t, onset, wtaurise, wmin)
 
 
@@ -763,6 +921,8 @@ conflict_stimflex_drift: DriftFunction = conflict_stimflex_drift  # noqa: PLW012
 conflict_stimflex_dual_drift: DriftFunction = conflict_stimflex_dual_drift  # noqa: PLW0127
 conflict_dsstimflex_drift: DriftFunction = conflict_dsstimflex_drift  # noqa: PLW0127
 conflict_dsstimflexlin_drift: DriftFunction = conflict_dsstimflexlin_drift  # noqa: PLW0127
+conflict_dsstimflexpwlin_drift: DriftFunction = conflict_dsstimflexpwlin_drift  # noqa: PLW0127
 hazard_gate: DriftFunction = hazard_gate  # noqa: PLW0127
+hazard2: DriftFunction = hazard2  # noqa: PLW0127
 logit_gate: DriftFunction = logit_gate  # noqa: PLW0127
-logitlin: DriftFunction = logitlin  # noqa: PLW0127
+softmax_gate: DriftFunction = softmax_gate  # noqa: PLW0127

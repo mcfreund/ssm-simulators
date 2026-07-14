@@ -5,8 +5,9 @@ The stimflex family shares three ingredients, combined in each ``get_*_config`` 
 * a **drift** base -- ``conflict_stimflex_drift`` (static boxcar), ``conflict_dsstimflex_drift``
   (exponential cue-locked dynamics), or ``conflict_dsstimflexlin_drift`` (linear cue-locked
   dynamics); ``conflict_stimflex_dual_drift`` is the two-column variant for dual-particle sims.
-* a **gate** on the decision variable -- ``logit_gate`` (discrete onset selection),
-  ``logitlin`` (onset-slope selection), or ``hazard_gate`` (continuous detection hazard).
+* a **gate** on the decision variable -- ``logit_gate`` (discrete onset selection) or
+  ``hazard_gate`` (continuous detection hazard). Onset-time-dependent (lin) variants are
+  expressed pan-side as per-trial effective gate coefficients, so need no separate gate here.
 * a **simulator** -- ``ddm_flex_weight`` (single particle + gate) or ``ddm_flex_weight_dualleak``
   (two leaky accumulators + gate).
 
@@ -135,6 +136,30 @@ def _dsstimflexlin_drift_params():
     )
 
 
+def _dsstimflexpwlin_drift_params():
+    """Piecewise-linear (ramp-then-plateau) cue-locked drift; ``maxstimoffset`` is supplied.
+
+    Evaluator params: per-input ramp start / plateau value + knot (fraction of the span). The
+    cognitive (level, tilt) parameterization is applied model-side (pan).
+    """
+    return dict(
+        tstart=_new_param(2.0, 0.0, 20.0),
+        dstart=_new_param(2.0, 0.0, 20.0),
+        tplateau=_new_param(2.0, 0.0, 20.0),
+        dplateau=_new_param(2.0, 0.0, 20.0),
+        ttau=_new_param(0.5, 1e-2, 1.0),
+        dtau=_new_param(0.5, 1e-2, 1.0),
+        tcoh=_new_param(0.5, -1.0, 1.0),
+        dcoh=_new_param(-0.5, -1.0, 1.0),
+        tonset=_new_param(0.0, 0.0, 1.0),
+        donset=_new_param(0.0, 0.0, 1.0),
+        toffset=_new_param(0.2, 0.0, 1.0),
+        doffset=_new_param(0.2, 0.0, 1.0),
+        maxstimoffset=_new_param(1.0 + 16 / 60, 0.0, 20.0),
+        vtaufall=_new_param(0.1, 1e-3, 0.5),
+    )
+
+
 def _logit_gate_params():
     """Discrete onset-selection gate: leak floor, rise time, target-vs-distractor logit."""
     return dict(
@@ -144,11 +169,13 @@ def _logit_gate_params():
     )
 
 
-def _logitlin_gate_params():
-    """logit_gate + per-stimulus onset slopes (raw cue-locked onset)."""
-    return _logit_gate_params() | dict(
-        wtargetslope=_new_param(0.0, -10.0, 10.0),
-        wdistractorslope=_new_param(0.0, -10.0, 10.0),
+def _softmax_gate_params():
+    """3-class onset selection: leak floor, rise time, target & distractor selection log-odds."""
+    return dict(
+        wmin=_new_param(0.5, 0.0, 1.0),
+        wtaurise=_new_param(0.05, 1e-3, 0.5),
+        wtarget=_new_param(0.0, -10.0, 10.0),
+        wdistractor=_new_param(0.0, -10.0, 10.0),
     )
 
 
@@ -160,6 +187,13 @@ def _hazard_gate_params():
         wdistractor=_new_param(0.0, -5.0, 5.0),
         wmin=_new_param(0.5, 0.0, 1.0),
         wtaurise=_new_param(0.05, 1e-3, 0.5),
+    )
+
+
+def _hazard2_gate_params():
+    """hazard_gate + a focal post-onset energy window of length wtauonset (default 50 ms)."""
+    return _hazard_gate_params() | dict(
+        wtauonset=_new_param(0.05, 1e-3, 0.5),
     )
 
 
@@ -177,22 +211,6 @@ def get_conflict_stimflex_logit_config():
         drift_fun=df.conflict_stimflex_drift,
         weight_name="logit_gate",
         weight_fun=df.logit_gate,
-        choices=[-1, 1],
-        n_particles=1,
-        simulator=cssm.ddm_flex_weight,
-    )
-
-
-def get_conflict_stimflex_logitlin_config():
-    return _new_config(
-        name="conflict_stimflex_logitlin",
-        param_dict=_core_params() | _stimflex_drift_params() | _logitlin_gate_params(),
-        boundary_name="constant",
-        boundary=bf.constant,
-        drift_name="conflict_stimflex_drift",
-        drift_fun=df.conflict_stimflex_drift,
-        weight_name="logitlin",
-        weight_fun=df.logitlin,
         choices=[-1, 1],
         n_particles=1,
         simulator=cssm.ddm_flex_weight,
@@ -231,6 +249,38 @@ def get_conflict_dsstimflexlin_logit_config():
     )
 
 
+def get_conflict_dsstimflexpwlin_logit_config():
+    return _new_config(
+        name="conflict_dsstimflexpwlin_logit",
+        param_dict=_core_params() | _dsstimflexpwlin_drift_params() | _logit_gate_params(),
+        boundary_name="constant",
+        boundary=bf.constant,
+        drift_name="conflict_dsstimflexpwlin_drift",
+        drift_fun=df.conflict_dsstimflexpwlin_drift,
+        weight_name="logit_gate",
+        weight_fun=df.logit_gate,
+        choices=[-1, 1],
+        n_particles=1,
+        simulator=cssm.ddm_flex_weight,
+    )
+
+
+def get_conflict_stimflex_softmax_config():
+    return _new_config(
+        name="conflict_stimflex_softmax",
+        param_dict=_core_params() | _stimflex_drift_params() | _softmax_gate_params(),
+        boundary_name="constant",
+        boundary=bf.constant,
+        drift_name="conflict_stimflex_drift",
+        drift_fun=df.conflict_stimflex_drift,
+        weight_name="softmax_gate",
+        weight_fun=df.softmax_gate,
+        choices=[-1, 1],
+        n_particles=1,
+        simulator=cssm.ddm_flex_weight,
+    )
+
+
 def get_conflict_stimflex_hazard_config():
     return _new_config(
         name="conflict_stimflex_hazard",
@@ -241,6 +291,22 @@ def get_conflict_stimflex_hazard_config():
         drift_fun=df.conflict_stimflex_drift,
         weight_name="hazard_gate",
         weight_fun=df.hazard_gate,
+        choices=[-1, 1],
+        n_particles=1,
+        simulator=cssm.ddm_flex_weight,
+    )
+
+
+def get_conflict_stimflex_hazard2_config():
+    return _new_config(
+        name="conflict_stimflex_hazard2",
+        param_dict=_core_params() | _stimflex_drift_params() | _hazard2_gate_params(),
+        boundary_name="constant",
+        boundary=bf.constant,
+        drift_name="conflict_stimflex_drift",
+        drift_fun=df.conflict_stimflex_drift,
+        weight_name="hazard2",
+        weight_fun=df.hazard2,
         choices=[-1, 1],
         n_particles=1,
         simulator=cssm.ddm_flex_weight,
