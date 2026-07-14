@@ -583,6 +583,7 @@ def simulator(
     sigma_noise: float | None = None,
     smooth_unif: bool = True,
     random_state: int | None = None,
+    n_threads: int = 1,
 ) -> dict:
     """Basic data simulator for the models included in HDDM.
 
@@ -612,6 +613,13 @@ def simulator(
         random_state: int | None <default=None>
             Integer passed to random_seed function in the simulator.
             Can be used for reproducibility.
+        n_threads: int <default=1>
+            Number of OpenMP threads for the parallel diffusion loop. Only the
+            flex-weight simulators (ddm_flex_weight, ddm_flex_weight_dualleak)
+            honor it, and only when the cssm extension was built with OpenMP+GSL;
+            otherwise it silently falls back to single-threaded. n_threads=1 is
+            the byte-for-byte sequential baseline; n_threads>1 uses a per-thread
+            GSL RNG (a different noise stream, equal in distribution).
 
     Return
     ------

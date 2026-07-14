@@ -9,4 +9,5 @@ DEFAULT_SIM_PARAMS: dict[str, Any] = {
     "random_state": None,
     "return_option": "full",
     "smooth_unif": False,
+    "n_threads": 1,
 }

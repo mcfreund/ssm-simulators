@@ -7,14 +7,94 @@
 # Functions for DDM data simulation
 import cython
 from libc.stdlib cimport rand, RAND_MAX, srand
+from libc.stdint cimport uint64_t
 from libc.math cimport log, sqrt, pow, fmax, atan, sin, cos, tan, M_PI, M_PI_2
 from libc.time cimport time
+from cython.parallel cimport prange, parallel, threadid
 
 import numpy as np
 cimport numpy as np
 import numbers
+import warnings
 
 DTYPE = np.float32
+
+# ---------------------------------------------------------------------------
+# Thread-safe RNG for OpenMP-parallel simulators.
+#
+# The default (n_threads == 1) code paths keep using the libc rand()-based
+# helpers above and are byte-for-byte unchanged. When n_threads > 1, the
+# parallel paths instead use a per-thread GSL Ziggurat RNG (declared here from
+# src/gsl_rng.h), which is safe to call from nogil prange loops. gsl_rng.h
+# provides no-op stubs under !HAVE_GSL so the extension still compiles without
+# GSL; the parallel path is only entered when GSL *and* OpenMP are available
+# (see _resolve_n_threads).
+# ---------------------------------------------------------------------------
+
+# Max threads => compile-time size of the per-thread RNG state array.
+DEF MAX_THREADS = 256
+
+cdef extern from "gsl_rng.h" nogil:
+    ctypedef struct ssms_rng_state:
+        void* rng
+    void ssms_rng_alloc(ssms_rng_state* state)
+    void ssms_rng_free(ssms_rng_state* state)
+    void ssms_rng_seed(ssms_rng_state* state, uint64_t seed)
+    float ssms_rng_gaussian_f32(ssms_rng_state* state)
+    float ssms_rng_uniform_f32(ssms_rng_state* state)
+    uint64_t ssms_rng_mix_seed(uint64_t base, uint64_t t1, uint64_t t2)
+
+ctypedef ssms_rng_state RngState
+
+# Compile-time capability probes (set by setup.py define_macros / -fopenmp).
+cdef extern from *:
+    """
+    #ifdef HAVE_GSL
+        #define SSMS_HAVE_GSL 1
+    #else
+        #define SSMS_HAVE_GSL 0
+    #endif
+    #ifdef _OPENMP
+        #define SSMS_HAVE_OPENMP 1
+    #else
+        #define SSMS_HAVE_OPENMP 0
+    #endif
+    """
+    int SSMS_HAVE_GSL
+    int SSMS_HAVE_OPENMP
+
+
+def gsl_available():
+    """True if the extension was compiled with GSL (parallel RNG support)."""
+    return bool(SSMS_HAVE_GSL)
+
+
+def openmp_available():
+    """True if the extension was compiled with OpenMP."""
+    return bool(SSMS_HAVE_OPENMP)
+
+
+cdef int _resolve_n_threads(int n_threads) except -1:
+    """Validate a requested thread count, warning + falling back to 1 when the
+    parallel path is unavailable. Returns the number of threads to actually use."""
+    if n_threads <= 1:
+        return 1
+    if not SSMS_HAVE_OPENMP or not SSMS_HAVE_GSL:
+        warnings.warn(
+            "n_threads > 1 requested but the cssm extension was built without "
+            "OpenMP and/or GSL; falling back to single-threaded. Rebuild with "
+            "GSL available (on Oscar: module load gsl/2.8-cpuv) for parallelism.",
+            RuntimeWarning,
+        )
+        return 1
+    if n_threads > MAX_THREADS:
+        warnings.warn(
+            f"n_threads={n_threads} exceeds MAX_THREADS={MAX_THREADS}; "
+            f"clamping to {MAX_THREADS}.",
+            RuntimeWarning,
+        )
+        return MAX_THREADS
+    return n_threads
 
 cdef set_seed(random_state):
     """
@@ -881,6 +961,7 @@ def ddm_flex_weight(np.ndarray[float, ndim = 1] v,
              random_state = None,
              return_option = 'full',
              smooth_unif  = False,
+             int n_threads = 1,
              **kwargs):
     """
     Simulate reaction times and choices from a drift diffusion model with flexible boundaries,
@@ -958,74 +1039,177 @@ def ddm_flex_weight(np.ndarray[float, ndim = 1] v,
     cdef float[:] drift_view = drift
     cdef float[:] weight_view = weight
 
+    # --- parallel-path locals (used only when n_threads > 1) ---
+    cdef int c_n_threads = _resolve_n_threads(n_threads)
+    cdef bint c_smooth_unif = smooth_unif
+    cdef RngState[MAX_THREADS] rng_states
+    cdef uint64_t base_seed = 0, combined_seed = 0
+    cdef int tid, i_thread
+    cdef Py_ssize_t total_iterations, flat_idx, pk, pn, pix
+    cdef float py, pt, psu, dl_k, sst_k, b_start
+    cdef float[:, :] drift_all_view
+    cdef float[:, :] weight_all_view
+    cdef float[:, :] boundary_all_view
+    cdef float[:] deadline_tmp_view
+    cdef float[:] sqrt_st_view
+
     # Numpy generator seeded from the same master seed (set_seed above), so the
     # Python weight callback draws reproducibly and in step with the C diffusion
     # noise. Consumed once per trial across the loop below.
     weight_rng = np.random.default_rng(random_state)
 
-    # Loop over samples
-    for k in range(n_trials):
-        # Precompute boundary, drift, and weight evaluations
+    if c_n_threads == 1:
+        # ============ SEQUENTIAL PATH (baseline — byte-for-byte unchanged) =====
+        # Loop over samples
+        for k in range(n_trials):
+            # Precompute boundary, drift, and weight evaluations
 
-        # Drift
-        drift_params_tmp = {key: drift_params[key][k] for key in drift_params.keys()}
-        drift[:] = np.add(v_view[k], drift_fun(t = t_s, **drift_params_tmp)).astype(DTYPE)
+            # Drift
+            drift_params_tmp = {key: drift_params[key][k] for key in drift_params.keys()}
+            drift[:] = np.add(v_view[k], drift_fun(t = t_s, **drift_params_tmp)).astype(DTYPE)
 
-        # Weight on the decision variable
-        weight_params_tmp = {key: weight_params[key][k] for key in weight_params.keys()}
-        weight[:] = weight_fun(t = t_s, rng = weight_rng, **weight_params_tmp).astype(DTYPE)
+            # Weight on the decision variable
+            weight_params_tmp = {key: weight_params[key][k] for key in weight_params.keys()}
+            weight[:] = weight_fun(t = t_s, rng = weight_rng, **weight_params_tmp).astype(DTYPE)
 
-        # Boundary
-        boundary_params_tmp = {key: boundary_params[key][k] for key in boundary_params.keys()}
-        if boundary_multiplicative:
-            boundary[:] = np.multiply(a_view[k], boundary_fun(t = t_s, **boundary_params_tmp)).astype(DTYPE)
-        else:
-            boundary[:] = np.add(a_view[k], boundary_fun(t = t_s, **boundary_params_tmp)).astype(DTYPE)
+            # Boundary
+            boundary_params_tmp = {key: boundary_params[key][k] for key in boundary_params.keys()}
+            if boundary_multiplicative:
+                boundary[:] = np.multiply(a_view[k], boundary_fun(t = t_s, **boundary_params_tmp)).astype(DTYPE)
+            else:
+                boundary[:] = np.add(a_view[k], boundary_fun(t = t_s, **boundary_params_tmp)).astype(DTYPE)
 
-        deadline_tmp = min(max_t, deadline_view[k] - t_view[k])
-        sqrt_st = delta_t_sqrt * s_view[k]
-        for n in range(n_samples):
-            y = (-1) * boundary_view[0] + (z_view[k] * 2 * (boundary_view[0]))  # reset starting position
-            t_particle = 0.0 # reset time
-            ix = 0 # reset boundary index
-
-            # Can improve with less checks
-            if n == 0:
-                if k == 0:
-                    traj_view[0, 0] = y
-
-            # Random walker; weight gates the momentary evidence (drift + noise)
-            while (y >= (-1) * boundary_view[ix]) and (y <= boundary_view[ix]) and (t_particle <= deadline_tmp):
-                y += weight_view[ix] * ((drift_view[ix] * delta_t) + (sqrt_st * gaussian_values[m]))
-                t_particle += delta_t
-                ix += 1
-                m += 1
+            deadline_tmp = min(max_t, deadline_view[k] - t_view[k])
+            sqrt_st = delta_t_sqrt * s_view[k]
+            for n in range(n_samples):
+                y = (-1) * boundary_view[0] + (z_view[k] * 2 * (boundary_view[0]))  # reset starting position
+                t_particle = 0.0 # reset time
+                ix = 0 # reset boundary index
 
                 # Can improve with less checks
                 if n == 0:
                     if k == 0:
-                        traj_view[ix, 0] = y
+                        traj_view[0, 0] = y
 
-                # Can improve with less checks
-                if m == num_draws:
-                    gaussian_values = draw_gaussian(num_draws)
-                    m = 0
+                # Random walker; weight gates the momentary evidence (drift + noise)
+                while (y >= (-1) * boundary_view[ix]) and (y <= boundary_view[ix]) and (t_particle <= deadline_tmp):
+                    y += weight_view[ix] * ((drift_view[ix] * delta_t) + (sqrt_st * gaussian_values[m]))
+                    t_particle += delta_t
+                    ix += 1
+                    m += 1
 
-            if smooth_unif :
-                if t_particle == 0.0:
-                    smooth_u = random_uniform() * 0.5 * delta_t
-                elif t_particle < deadline_tmp:
-                    smooth_u = (0.5 - random_uniform()) * delta_t
+                    # Can improve with less checks
+                    if n == 0:
+                        if k == 0:
+                            traj_view[ix, 0] = y
+
+                    # Can improve with less checks
+                    if m == num_draws:
+                        gaussian_values = draw_gaussian(num_draws)
+                        m = 0
+
+                if smooth_unif :
+                    if t_particle == 0.0:
+                        smooth_u = random_uniform() * 0.5 * delta_t
+                    elif t_particle < deadline_tmp:
+                        smooth_u = (0.5 - random_uniform()) * delta_t
+                    else:
+                        smooth_u = 0.0
                 else:
                     smooth_u = 0.0
+
+                rts_view[n, k, 0] = t_particle + t_view[k] + smooth_u # Store rt
+                choices_view[n, k, 0] = sign(y) # Store choice
+
+                if (rts_view[n, k, 0] >= deadline_view[k]) | (deadline_view[k] <= 0):
+                    rts_view[n, k, 0] = -999
+    else:
+        # ============ PARALLEL PATH (OpenMP + per-thread GSL Ziggurat) =========
+        # Precompute drift/weight/boundary for ALL trials up front. The Python
+        # callbacks hold the GIL; crucially the weight callback draws from
+        # weight_rng in ascending-k order — exactly as the sequential path does —
+        # so weights are identical across paths for a given random_state. Only
+        # the diffusion noise stream differs (GSL Ziggurat vs libc rand), by
+        # design; trajectory recording is unavailable in this path.
+        drift_all = np.zeros((n_trials, num_draws), dtype = DTYPE)
+        weight_all = np.zeros((n_trials, num_draws), dtype = DTYPE)
+        boundary_all = np.zeros((n_trials, num_draws), dtype = DTYPE)
+        for k in range(n_trials):
+            drift_params_tmp = {key: drift_params[key][k] for key in drift_params.keys()}
+            drift_all[k, :] = np.add(v_view[k], drift_fun(t = t_s, **drift_params_tmp)).astype(DTYPE)
+
+            weight_params_tmp = {key: weight_params[key][k] for key in weight_params.keys()}
+            weight_all[k, :] = weight_fun(t = t_s, rng = weight_rng, **weight_params_tmp).astype(DTYPE)
+
+            boundary_params_tmp = {key: boundary_params[key][k] for key in boundary_params.keys()}
+            if boundary_multiplicative:
+                boundary_all[k, :] = np.multiply(a_view[k], boundary_fun(t = t_s, **boundary_params_tmp)).astype(DTYPE)
             else:
-                smooth_u = 0.0
+                boundary_all[k, :] = np.add(a_view[k], boundary_fun(t = t_s, **boundary_params_tmp)).astype(DTYPE)
 
-            rts_view[n, k, 0] = t_particle + t_view[k] + smooth_u # Store rt
-            choices_view[n, k, 0] = sign(y) # Store choice
+        deadline_tmp_arr = np.minimum(max_t, np.subtract(deadline, t)).astype(DTYPE)
+        sqrt_st_arr = np.multiply(delta_t_sqrt, s).astype(DTYPE)
 
-            if (rts_view[n, k, 0] >= deadline_view[k]) | (deadline_view[k] <= 0):
-                rts_view[n, k, 0] = -999
+        drift_all_view = drift_all
+        weight_all_view = weight_all
+        boundary_all_view = boundary_all
+        deadline_tmp_view = deadline_tmp_arr
+        sqrt_st_view = sqrt_st_arr
+
+        base_seed = <uint64_t> (random_state if random_state is not None
+                                else np.random.randint(0, 2 ** 31 - 1))
+        total_iterations = <Py_ssize_t> n_trials * <Py_ssize_t> n_samples
+
+        for i_thread in range(c_n_threads):
+            ssms_rng_alloc(&rng_states[i_thread])
+
+        with nogil, parallel(num_threads = c_n_threads):
+            for flat_idx in prange(total_iterations, schedule = 'dynamic'):
+                tid = threadid()
+                pk = flat_idx // n_samples   # trial index
+                pn = flat_idx % n_samples    # sample index
+
+                # Independent RNG stream per (trial, sample), reproducible in n_threads.
+                combined_seed = ssms_rng_mix_seed(base_seed, <uint64_t> pk, <uint64_t> pn)
+                ssms_rng_seed(&rng_states[tid], combined_seed)
+
+                dl_k = deadline_tmp_view[pk]
+                sst_k = sqrt_st_view[pk]
+                b_start = boundary_all_view[pk, 0]
+                py = (-1) * b_start + (z_view[pk] * 2 * b_start)   # reset starting position
+                pt = 0.0
+                pix = 0
+
+                while (py >= (-1) * boundary_all_view[pk, pix]) and (py <= boundary_all_view[pk, pix]) and (pt <= dl_k):
+                    py = py + weight_all_view[pk, pix] * ((drift_all_view[pk, pix] * delta_t) + (sst_k * ssms_rng_gaussian_f32(&rng_states[tid])))
+                    pt = pt + delta_t
+                    pix = pix + 1
+
+                if c_smooth_unif:
+                    if pt == 0.0:
+                        psu = ssms_rng_uniform_f32(&rng_states[tid]) * 0.5 * delta_t
+                    elif pt < dl_k:
+                        psu = (0.5 - ssms_rng_uniform_f32(&rng_states[tid])) * delta_t
+                    else:
+                        psu = 0.0
+                else:
+                    psu = 0.0
+
+                rts_view[pn, pk, 0] = pt + t_view[pk] + psu
+                choices_view[pn, pk, 0] = (py > 0) - (py < 0)
+
+                if (rts_view[pn, pk, 0] >= deadline_view[pk]) or (deadline_view[pk] <= 0):
+                    rts_view[pn, pk, 0] = -999
+
+        for i_thread in range(c_n_threads):
+            ssms_rng_free(&rng_states[i_thread])
+
+        # Expose the last trial's precompute in the 1D metadata arrays, matching
+        # the sequential path (which leaves drift/weight/boundary at trial n-1).
+        if n_trials > 0:
+            boundary[:] = boundary_all[n_trials - 1, :]
+            drift[:] = drift_all[n_trials - 1, :]
+            weight[:] = weight_all[n_trials - 1, :]
 
     if return_option == 'full':
         return {'rts': rts, 'choices': choices,  'metadata': {'v': v,
@@ -1088,6 +1272,7 @@ def ddm_flex_weight_dualleak(
     random_state = None,
     return_option = 'full',
     smooth_unif  = False,
+    int n_threads = 1,
     **kwargs):
     """
     Simulate reaction times and choices from a dual-accumulator leaky diffusion model with a
@@ -1170,84 +1355,193 @@ def ddm_flex_weight_dualleak(
     cdef float[:, :] drift_view = drift
     cdef float[:] weight_view = weight
 
+    # --- parallel-path locals (used only when n_threads > 1) ---
+    cdef int c_n_threads = _resolve_n_threads(n_threads)
+    cdef bint c_smooth_unif = smooth_unif
+    cdef RngState[MAX_THREADS] rng_states
+    cdef uint64_t base_seed = 0, combined_seed = 0
+    cdef int tid, i_thread
+    cdef Py_ssize_t total_iterations, flat_idx, pk, pn, pix
+    cdef float py, pyt, pyd, py_start, pt, psu, dl_k, sst_k, b_start, noise
+    cdef float[:, :, :] drift_all_view
+    cdef float[:, :] weight_all_view
+    cdef float[:, :] boundary_all_view
+    cdef float[:] deadline_tmp_view
+    cdef float[:] sqrt_st_view
+
     # Numpy generator seeded from the same master seed (set_seed above), so the
     # Python weight callback draws reproducibly and in step with the C diffusion
     # noise. Consumed once per trial across the loop below.
     weight_rng = np.random.default_rng(random_state)
 
-    # Loop over samples
-    for k in range(n_trials):
-        # Precompute drift, weight, and boundary evaluations
+    if c_n_threads == 1:
+        # ============ SEQUENTIAL PATH (baseline — byte-for-byte unchanged) =====
+        # Loop over samples
+        for k in range(n_trials):
+            # Precompute drift, weight, and boundary evaluations
 
-        # Drift (two columns: target, distractor)
-        drift_params_tmp = {key: drift_params[key][k] for key in drift_params.keys()}
-        drift[:, :] = drift_fun(t = t_s, **drift_params_tmp).astype(DTYPE)
+            # Drift (two columns: target, distractor)
+            drift_params_tmp = {key: drift_params[key][k] for key in drift_params.keys()}
+            drift[:, :] = drift_fun(t = t_s, **drift_params_tmp).astype(DTYPE)
 
-        # Weight on the decision variable
-        weight_params_tmp = {key: weight_params[key][k] for key in weight_params.keys()}
-        weight[:] = weight_fun(t = t_s, rng = weight_rng, **weight_params_tmp).astype(DTYPE)
+            # Weight on the decision variable
+            weight_params_tmp = {key: weight_params[key][k] for key in weight_params.keys()}
+            weight[:] = weight_fun(t = t_s, rng = weight_rng, **weight_params_tmp).astype(DTYPE)
 
-        # Boundary
-        boundary_params_tmp = {key: boundary_params[key][k] for key in boundary_params.keys()}
-        if boundary_multiplicative:
-            boundary[:] = np.multiply(a_view[k], boundary_fun(t = t_s, **boundary_params_tmp)).astype(DTYPE)
-        else:
-            boundary[:] = np.add(a_view[k], boundary_fun(t = t_s, **boundary_params_tmp)).astype(DTYPE)
+            # Boundary
+            boundary_params_tmp = {key: boundary_params[key][k] for key in boundary_params.keys()}
+            if boundary_multiplicative:
+                boundary[:] = np.multiply(a_view[k], boundary_fun(t = t_s, **boundary_params_tmp)).astype(DTYPE)
+            else:
+                boundary[:] = np.add(a_view[k], boundary_fun(t = t_s, **boundary_params_tmp)).astype(DTYPE)
 
-        deadline_tmp = min(max_t, deadline_view[k] - t_view[k])
-        sqrt_st = delta_t_sqrt * s_view[k]
-        for n in range(n_samples):
-            y_start = (-1) * boundary_view[0] + (z_view[k] * 2 * (boundary_view[0]))  # reset starting position
-            y = y_start
-            y_t = 0.0
-            y_d = 0.0
-            t_particle = 0.0 # reset time
-            ix = 0 # reset boundary index
-
-            # Can improve with less checks
-            if n == 0:
-                if k == 0:
-                    traj_view[0, 0] = y
-                    traj_view[0, 1] = y_t
-                    traj_view[0, 2] = y_d
-
-            # Random walker; weight gates the momentary evidence of each leaky accumulator
-            while (y >= (-1) * boundary_view[ix]) and (y <= boundary_view[ix]) and (t_particle <= deadline_tmp):
-                y_t += weight_view[ix] * (((drift_view[ix, 0] - (g_t_view[k] * y_t)) * delta_t) + (sqrt_st/2 * gaussian_values[m]))
-                y_d += weight_view[ix] * (((drift_view[ix, 1] - (g_d_view[k] * y_d)) * delta_t) + (sqrt_st/2 * gaussian_values[m]))
-                y = y_start + y_t + y_d
-
-                t_particle += delta_t
-                ix += 1
-                m += 1
+            deadline_tmp = min(max_t, deadline_view[k] - t_view[k])
+            sqrt_st = delta_t_sqrt * s_view[k]
+            for n in range(n_samples):
+                y_start = (-1) * boundary_view[0] + (z_view[k] * 2 * (boundary_view[0]))  # reset starting position
+                y = y_start
+                y_t = 0.0
+                y_d = 0.0
+                t_particle = 0.0 # reset time
+                ix = 0 # reset boundary index
 
                 # Can improve with less checks
                 if n == 0:
                     if k == 0:
-                        traj_view[ix, 0] = y
-                        traj_view[ix, 1] = y_t
-                        traj_view[ix, 2] = y_d
+                        traj_view[0, 0] = y
+                        traj_view[0, 1] = y_t
+                        traj_view[0, 2] = y_d
 
-                # Can improve with less checks
-                if m == num_draws:
-                    gaussian_values = draw_gaussian(num_draws)
-                    m = 0
+                # Random walker; weight gates the momentary evidence of each leaky accumulator
+                while (y >= (-1) * boundary_view[ix]) and (y <= boundary_view[ix]) and (t_particle <= deadline_tmp):
+                    y_t += weight_view[ix] * (((drift_view[ix, 0] - (g_t_view[k] * y_t)) * delta_t) + (sqrt_st/2 * gaussian_values[m]))
+                    y_d += weight_view[ix] * (((drift_view[ix, 1] - (g_d_view[k] * y_d)) * delta_t) + (sqrt_st/2 * gaussian_values[m]))
+                    y = y_start + y_t + y_d
 
-            if smooth_unif :
-                if t_particle == 0.0:
-                    smooth_u = random_uniform() * 0.5 * delta_t
-                elif t_particle < deadline_tmp:
-                    smooth_u = (0.5 - random_uniform()) * delta_t
+                    t_particle += delta_t
+                    ix += 1
+                    m += 1
+
+                    # Can improve with less checks
+                    if n == 0:
+                        if k == 0:
+                            traj_view[ix, 0] = y
+                            traj_view[ix, 1] = y_t
+                            traj_view[ix, 2] = y_d
+
+                    # Can improve with less checks
+                    if m == num_draws:
+                        gaussian_values = draw_gaussian(num_draws)
+                        m = 0
+
+                if smooth_unif :
+                    if t_particle == 0.0:
+                        smooth_u = random_uniform() * 0.5 * delta_t
+                    elif t_particle < deadline_tmp:
+                        smooth_u = (0.5 - random_uniform()) * delta_t
+                    else:
+                        smooth_u = 0.0
                 else:
                     smooth_u = 0.0
+
+                rts_view[n, k, 0] = t_particle + t_view[k] + smooth_u # Store rt
+                choices_view[n, k, 0] = sign(y) # Store choice
+
+                if (rts_view[n, k, 0] >= deadline_view[k]) | (deadline_view[k] <= 0):
+                    rts_view[n, k, 0] = -999
+    else:
+        # ============ PARALLEL PATH (OpenMP + per-thread GSL Ziggurat) =========
+        # Precompute drift(2-col)/weight/boundary for ALL trials up front. The
+        # weight callback draws from weight_rng in ascending-k order — exactly as
+        # the sequential path — so weights are identical across paths for a given
+        # random_state. Only the (shared, per-step) diffusion noise differs (GSL
+        # Ziggurat vs libc rand); trajectory recording is unavailable here.
+        drift_all = np.zeros((n_trials, num_draws, 2), dtype = DTYPE)
+        weight_all = np.zeros((n_trials, num_draws), dtype = DTYPE)
+        boundary_all = np.zeros((n_trials, num_draws), dtype = DTYPE)
+        for k in range(n_trials):
+            drift_params_tmp = {key: drift_params[key][k] for key in drift_params.keys()}
+            drift_all[k, :, :] = drift_fun(t = t_s, **drift_params_tmp).astype(DTYPE)
+
+            weight_params_tmp = {key: weight_params[key][k] for key in weight_params.keys()}
+            weight_all[k, :] = weight_fun(t = t_s, rng = weight_rng, **weight_params_tmp).astype(DTYPE)
+
+            boundary_params_tmp = {key: boundary_params[key][k] for key in boundary_params.keys()}
+            if boundary_multiplicative:
+                boundary_all[k, :] = np.multiply(a_view[k], boundary_fun(t = t_s, **boundary_params_tmp)).astype(DTYPE)
             else:
-                smooth_u = 0.0
+                boundary_all[k, :] = np.add(a_view[k], boundary_fun(t = t_s, **boundary_params_tmp)).astype(DTYPE)
 
-            rts_view[n, k, 0] = t_particle + t_view[k] + smooth_u # Store rt
-            choices_view[n, k, 0] = sign(y) # Store choice
+        deadline_tmp_arr = np.minimum(max_t, np.subtract(deadline, t)).astype(DTYPE)
+        sqrt_st_arr = np.multiply(delta_t_sqrt, s).astype(DTYPE)
 
-            if (rts_view[n, k, 0] >= deadline_view[k]) | (deadline_view[k] <= 0):
-                rts_view[n, k, 0] = -999
+        drift_all_view = drift_all
+        weight_all_view = weight_all
+        boundary_all_view = boundary_all
+        deadline_tmp_view = deadline_tmp_arr
+        sqrt_st_view = sqrt_st_arr
+
+        base_seed = <uint64_t> (random_state if random_state is not None
+                                else np.random.randint(0, 2 ** 31 - 1))
+        total_iterations = <Py_ssize_t> n_trials * <Py_ssize_t> n_samples
+
+        for i_thread in range(c_n_threads):
+            ssms_rng_alloc(&rng_states[i_thread])
+
+        with nogil, parallel(num_threads = c_n_threads):
+            for flat_idx in prange(total_iterations, schedule = 'dynamic'):
+                tid = threadid()
+                pk = flat_idx // n_samples   # trial index
+                pn = flat_idx % n_samples    # sample index
+
+                combined_seed = ssms_rng_mix_seed(base_seed, <uint64_t> pk, <uint64_t> pn)
+                ssms_rng_seed(&rng_states[tid], combined_seed)
+
+                dl_k = deadline_tmp_view[pk]
+                sst_k = sqrt_st_view[pk]
+                b_start = boundary_all_view[pk, 0]
+                py_start = (-1) * b_start + (z_view[pk] * 2 * b_start)   # reset starting position
+                py = py_start
+                pyt = 0.0
+                pyd = 0.0
+                pt = 0.0
+                pix = 0
+
+                # Both accumulators share ONE noise draw per step (matches sequential).
+                while (py >= (-1) * boundary_all_view[pk, pix]) and (py <= boundary_all_view[pk, pix]) and (pt <= dl_k):
+                    noise = ssms_rng_gaussian_f32(&rng_states[tid])
+                    pyt = pyt + weight_all_view[pk, pix] * (((drift_all_view[pk, pix, 0] - (g_t_view[pk] * pyt)) * delta_t) + (sst_k/2 * noise))
+                    pyd = pyd + weight_all_view[pk, pix] * (((drift_all_view[pk, pix, 1] - (g_d_view[pk] * pyd)) * delta_t) + (sst_k/2 * noise))
+                    py = py_start + pyt + pyd
+
+                    pt = pt + delta_t
+                    pix = pix + 1
+
+                if c_smooth_unif:
+                    if pt == 0.0:
+                        psu = ssms_rng_uniform_f32(&rng_states[tid]) * 0.5 * delta_t
+                    elif pt < dl_k:
+                        psu = (0.5 - ssms_rng_uniform_f32(&rng_states[tid])) * delta_t
+                    else:
+                        psu = 0.0
+                else:
+                    psu = 0.0
+
+                rts_view[pn, pk, 0] = pt + t_view[pk] + psu
+                choices_view[pn, pk, 0] = (py > 0) - (py < 0)
+
+                if (rts_view[pn, pk, 0] >= deadline_view[pk]) or (deadline_view[pk] <= 0):
+                    rts_view[pn, pk, 0] = -999
+
+        for i_thread in range(c_n_threads):
+            ssms_rng_free(&rng_states[i_thread])
+
+        # Expose the last trial's precompute in the metadata arrays, matching the
+        # sequential path (which leaves drift/weight/boundary at trial n-1).
+        if n_trials > 0:
+            boundary[:] = boundary_all[n_trials - 1, :]
+            drift[:, :] = drift_all[n_trials - 1, :, :]
+            weight[:] = weight_all[n_trials - 1, :]
 
     if return_option == 'full':
         return {'rts': rts, 'choices': choices,  'metadata': {'a': a,
