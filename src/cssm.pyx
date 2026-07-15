@@ -938,6 +938,64 @@ def ddm_flex(np.ndarray[float, ndim = 1] v,
         raise ValueError('return_option must be either "full" or "minimal"')
 
 
+def _fill_flex_precompute(drift_all, weight_all, boundary_all, t_s, v, a,
+                          drift_fun, drift_params, weight_fun, weight_params, weight_rng,
+                          boundary_fun, boundary_params, boundary_multiplicative,
+                          n_trials, vectorize):
+    """Fill the (n_trials, num_draws) drift / weight / boundary buffers.
+
+    Per callable: if `vectorize` and the function advertises a `.batched` sibling
+    (accepting (n_trials,) param arrays -> (n_trials, len(t_s))), call it ONCE;
+    otherwise loop per trial with scalar params — byte-identical to the legacy
+    precompute. The modes are independent per array, so a batched drift can pair
+    with a per-trial-looped weight: every mode just fills the same buffers, which
+    the diffusion loop (sequential or prange) then reads. ``drift_all`` is 2D for
+    single-stream models and 3D ``(n_trials, len(t_s), 2)`` for dualleak; ``v``
+    (base drift rate) is None for dualleak (drift_fun returns both columns).
+    """
+    dual = drift_all.ndim == 3
+    # --- drift (drift_fun returns the stimulus drift; v is the base rate, if any) ---
+    drift_b = getattr(drift_fun, "batched", None) if vectorize else None
+    if drift_b is not None:
+        d = np.asarray(drift_b(t = t_s, **drift_params), dtype = DTYPE)
+        if v is not None:
+            d = d + np.asarray(v, dtype = DTYPE)[:, None]
+        drift_all[...] = d
+    else:
+        for k in range(n_trials):
+            dp = {key: drift_params[key][k] for key in drift_params.keys()}
+            d = drift_fun(t = t_s, **dp)
+            if dual:
+                drift_all[k, :, :] = np.asarray(d, dtype = DTYPE)
+            elif v is not None:
+                drift_all[k, :] = np.add(v[k], d).astype(DTYPE)
+            else:
+                drift_all[k, :] = np.asarray(d, dtype = DTYPE)
+
+    # --- weight (stochastic; batched sibling draws one vectorized call from weight_rng) ---
+    weight_b = getattr(weight_fun, "batched", None) if vectorize else None
+    if weight_b is not None:
+        weight_all[:, :] = np.asarray(weight_b(t = t_s, rng = weight_rng, **weight_params), dtype = DTYPE)
+    else:
+        for k in range(n_trials):
+            wp = {key: weight_params[key][k] for key in weight_params.keys()}
+            weight_all[k, :] = weight_fun(t = t_s, rng = weight_rng, **wp).astype(DTYPE)
+
+    # --- boundary ---
+    boundary_b = getattr(boundary_fun, "batched", None) if vectorize else None
+    if boundary_b is not None:
+        b = np.asarray(boundary_b(t = t_s, **boundary_params), dtype = DTYPE)
+        a_col = np.asarray(a, dtype = DTYPE)[:, None]
+        boundary_all[:, :] = (a_col * b) if boundary_multiplicative else (a_col + b)
+    else:
+        for k in range(n_trials):
+            bp = {key: boundary_params[key][k] for key in boundary_params.keys()}
+            if boundary_multiplicative:
+                boundary_all[k, :] = np.multiply(a[k], boundary_fun(t = t_s, **bp)).astype(DTYPE)
+            else:
+                boundary_all[k, :] = np.add(a[k], boundary_fun(t = t_s, **bp)).astype(DTYPE)
+
+
 # Simulate (rt, choice) tuples from: DDM WITH FLEXIBLE BOUNDARIES, FLEXIBLE DRIFT, AND DV WEIGHT ----
 # @cythonboundscheck(False)
 # @cythonwraparound(False)
@@ -962,6 +1020,7 @@ def ddm_flex_weight(np.ndarray[float, ndim = 1] v,
              return_option = 'full',
              smooth_unif  = False,
              int n_threads = 1,
+             bint vectorize_precompute = True,
              **kwargs):
     """
     Simulate reaction times and choices from a drift diffusion model with flexible boundaries,
@@ -1058,31 +1117,34 @@ def ddm_flex_weight(np.ndarray[float, ndim = 1] v,
     # noise. Consumed once per trial across the loop below.
     weight_rng = np.random.default_rng(random_state)
 
+    # ---- Shared precompute: fill 2D drift/weight/boundary for ALL trials ----
+    # Dispatched per callable (batched sibling vs per-trial loop) inside the
+    # helper. Both diffusion paths below read these buffers; hoisting the
+    # precompute keeps the two paths identical up to the noise stream.
+    # Width is len(t_s) (== the 1D metadata buffers), which can exceed num_draws
+    # by one due to arange FP rounding — the diffusion index never exceeds it.
+    cdef Py_ssize_t n_steps = t_s.shape[0]
+    drift_all = np.zeros((n_trials, n_steps), dtype = DTYPE)
+    weight_all = np.zeros((n_trials, n_steps), dtype = DTYPE)
+    boundary_all = np.zeros((n_trials, n_steps), dtype = DTYPE)
+    _fill_flex_precompute(
+        drift_all, weight_all, boundary_all, t_s, v, a,
+        drift_fun, drift_params, weight_fun, weight_params, weight_rng,
+        boundary_fun, boundary_params, boundary_multiplicative,
+        n_trials, vectorize_precompute)
+    drift_all_view = drift_all
+    weight_all_view = weight_all
+    boundary_all_view = boundary_all
+
     if c_n_threads == 1:
-        # ============ SEQUENTIAL PATH (baseline — byte-for-byte unchanged) =====
-        # Loop over samples
+        # ============ SEQUENTIAL PATH (libc rand noise; trajectory recorded) ===
+        # With vectorize_precompute=False this path is byte-for-byte the legacy
+        # baseline (per-trial precompute + libc-rand diffusion in ascending k).
         for k in range(n_trials):
-            # Precompute boundary, drift, and weight evaluations
-
-            # Drift
-            drift_params_tmp = {key: drift_params[key][k] for key in drift_params.keys()}
-            drift[:] = np.add(v_view[k], drift_fun(t = t_s, **drift_params_tmp)).astype(DTYPE)
-
-            # Weight on the decision variable
-            weight_params_tmp = {key: weight_params[key][k] for key in weight_params.keys()}
-            weight[:] = weight_fun(t = t_s, rng = weight_rng, **weight_params_tmp).astype(DTYPE)
-
-            # Boundary
-            boundary_params_tmp = {key: boundary_params[key][k] for key in boundary_params.keys()}
-            if boundary_multiplicative:
-                boundary[:] = np.multiply(a_view[k], boundary_fun(t = t_s, **boundary_params_tmp)).astype(DTYPE)
-            else:
-                boundary[:] = np.add(a_view[k], boundary_fun(t = t_s, **boundary_params_tmp)).astype(DTYPE)
-
             deadline_tmp = min(max_t, deadline_view[k] - t_view[k])
             sqrt_st = delta_t_sqrt * s_view[k]
             for n in range(n_samples):
-                y = (-1) * boundary_view[0] + (z_view[k] * 2 * (boundary_view[0]))  # reset starting position
+                y = (-1) * boundary_all_view[k, 0] + (z_view[k] * 2 * (boundary_all_view[k, 0]))  # reset starting position
                 t_particle = 0.0 # reset time
                 ix = 0 # reset boundary index
 
@@ -1092,8 +1154,8 @@ def ddm_flex_weight(np.ndarray[float, ndim = 1] v,
                         traj_view[0, 0] = y
 
                 # Random walker; weight gates the momentary evidence (drift + noise)
-                while (y >= (-1) * boundary_view[ix]) and (y <= boundary_view[ix]) and (t_particle <= deadline_tmp):
-                    y += weight_view[ix] * ((drift_view[ix] * delta_t) + (sqrt_st * gaussian_values[m]))
+                while (y >= (-1) * boundary_all_view[k, ix]) and (y <= boundary_all_view[k, ix]) and (t_particle <= deadline_tmp):
+                    y += weight_all_view[k, ix] * ((drift_all_view[k, ix] * delta_t) + (sqrt_st * gaussian_values[m]))
                     t_particle += delta_t
                     ix += 1
                     m += 1
@@ -1125,34 +1187,11 @@ def ddm_flex_weight(np.ndarray[float, ndim = 1] v,
                     rts_view[n, k, 0] = -999
     else:
         # ============ PARALLEL PATH (OpenMP + per-thread GSL Ziggurat) =========
-        # Precompute drift/weight/boundary for ALL trials up front. The Python
-        # callbacks hold the GIL; crucially the weight callback draws from
-        # weight_rng in ascending-k order — exactly as the sequential path does —
-        # so weights are identical across paths for a given random_state. Only
-        # the diffusion noise stream differs (GSL Ziggurat vs libc rand), by
-        # design; trajectory recording is unavailable in this path.
-        drift_all = np.zeros((n_trials, num_draws), dtype = DTYPE)
-        weight_all = np.zeros((n_trials, num_draws), dtype = DTYPE)
-        boundary_all = np.zeros((n_trials, num_draws), dtype = DTYPE)
-        for k in range(n_trials):
-            drift_params_tmp = {key: drift_params[key][k] for key in drift_params.keys()}
-            drift_all[k, :] = np.add(v_view[k], drift_fun(t = t_s, **drift_params_tmp)).astype(DTYPE)
-
-            weight_params_tmp = {key: weight_params[key][k] for key in weight_params.keys()}
-            weight_all[k, :] = weight_fun(t = t_s, rng = weight_rng, **weight_params_tmp).astype(DTYPE)
-
-            boundary_params_tmp = {key: boundary_params[key][k] for key in boundary_params.keys()}
-            if boundary_multiplicative:
-                boundary_all[k, :] = np.multiply(a_view[k], boundary_fun(t = t_s, **boundary_params_tmp)).astype(DTYPE)
-            else:
-                boundary_all[k, :] = np.add(a_view[k], boundary_fun(t = t_s, **boundary_params_tmp)).astype(DTYPE)
-
+        # Reads the shared precompute above; only the diffusion noise stream
+        # differs from the sequential path (GSL Ziggurat vs libc rand), by
+        # design. Trajectory recording is unavailable in this path.
         deadline_tmp_arr = np.minimum(max_t, np.subtract(deadline, t)).astype(DTYPE)
         sqrt_st_arr = np.multiply(delta_t_sqrt, s).astype(DTYPE)
-
-        drift_all_view = drift_all
-        weight_all_view = weight_all
-        boundary_all_view = boundary_all
         deadline_tmp_view = deadline_tmp_arr
         sqrt_st_view = sqrt_st_arr
 
@@ -1204,12 +1243,12 @@ def ddm_flex_weight(np.ndarray[float, ndim = 1] v,
         for i_thread in range(c_n_threads):
             ssms_rng_free(&rng_states[i_thread])
 
-        # Expose the last trial's precompute in the 1D metadata arrays, matching
-        # the sequential path (which leaves drift/weight/boundary at trial n-1).
-        if n_trials > 0:
-            boundary[:] = boundary_all[n_trials - 1, :]
-            drift[:] = drift_all[n_trials - 1, :]
-            weight[:] = weight_all[n_trials - 1, :]
+    # Expose the last trial's precompute in the 1D metadata arrays (both paths),
+    # matching the legacy behavior (drift/weight/boundary left at trial n-1).
+    if n_trials > 0:
+        boundary[:] = boundary_all[n_trials - 1, :]
+        drift[:] = drift_all[n_trials - 1, :]
+        weight[:] = weight_all[n_trials - 1, :]
 
     if return_option == 'full':
         return {'rts': rts, 'choices': choices,  'metadata': {'v': v,
@@ -1273,6 +1312,7 @@ def ddm_flex_weight_dualleak(
     return_option = 'full',
     smooth_unif  = False,
     int n_threads = 1,
+    bint vectorize_precompute = True,
     **kwargs):
     """
     Simulate reaction times and choices from a dual-accumulator leaky diffusion model with a
@@ -1374,31 +1414,33 @@ def ddm_flex_weight_dualleak(
     # noise. Consumed once per trial across the loop below.
     weight_rng = np.random.default_rng(random_state)
 
+    # ---- Shared precompute: fill drift(2-col)/weight/boundary for ALL trials ----
+    # Dispatched per callable (batched sibling vs per-trial loop) in the helper;
+    # both diffusion paths read these buffers. Width is len(t_s) (== the 1D
+    # metadata buffers), which can exceed num_draws by one via arange rounding.
+    # drift is 3D here (two columns); no base rate v (drift_fun returns both).
+    cdef Py_ssize_t n_steps = t_s.shape[0]
+    drift_all = np.zeros((n_trials, n_steps, 2), dtype = DTYPE)
+    weight_all = np.zeros((n_trials, n_steps), dtype = DTYPE)
+    boundary_all = np.zeros((n_trials, n_steps), dtype = DTYPE)
+    _fill_flex_precompute(
+        drift_all, weight_all, boundary_all, t_s, None, a,
+        drift_fun, drift_params, weight_fun, weight_params, weight_rng,
+        boundary_fun, boundary_params, boundary_multiplicative,
+        n_trials, vectorize_precompute)
+    drift_all_view = drift_all
+    weight_all_view = weight_all
+    boundary_all_view = boundary_all
+
     if c_n_threads == 1:
-        # ============ SEQUENTIAL PATH (baseline — byte-for-byte unchanged) =====
-        # Loop over samples
+        # ============ SEQUENTIAL PATH (libc rand noise; trajectory recorded) ===
+        # With vectorize_precompute=False this path is byte-for-byte the legacy
+        # baseline (per-trial precompute + libc-rand diffusion in ascending k).
         for k in range(n_trials):
-            # Precompute drift, weight, and boundary evaluations
-
-            # Drift (two columns: target, distractor)
-            drift_params_tmp = {key: drift_params[key][k] for key in drift_params.keys()}
-            drift[:, :] = drift_fun(t = t_s, **drift_params_tmp).astype(DTYPE)
-
-            # Weight on the decision variable
-            weight_params_tmp = {key: weight_params[key][k] for key in weight_params.keys()}
-            weight[:] = weight_fun(t = t_s, rng = weight_rng, **weight_params_tmp).astype(DTYPE)
-
-            # Boundary
-            boundary_params_tmp = {key: boundary_params[key][k] for key in boundary_params.keys()}
-            if boundary_multiplicative:
-                boundary[:] = np.multiply(a_view[k], boundary_fun(t = t_s, **boundary_params_tmp)).astype(DTYPE)
-            else:
-                boundary[:] = np.add(a_view[k], boundary_fun(t = t_s, **boundary_params_tmp)).astype(DTYPE)
-
             deadline_tmp = min(max_t, deadline_view[k] - t_view[k])
             sqrt_st = delta_t_sqrt * s_view[k]
             for n in range(n_samples):
-                y_start = (-1) * boundary_view[0] + (z_view[k] * 2 * (boundary_view[0]))  # reset starting position
+                y_start = (-1) * boundary_all_view[k, 0] + (z_view[k] * 2 * (boundary_all_view[k, 0]))  # reset starting position
                 y = y_start
                 y_t = 0.0
                 y_d = 0.0
@@ -1413,9 +1455,9 @@ def ddm_flex_weight_dualleak(
                         traj_view[0, 2] = y_d
 
                 # Random walker; weight gates the momentary evidence of each leaky accumulator
-                while (y >= (-1) * boundary_view[ix]) and (y <= boundary_view[ix]) and (t_particle <= deadline_tmp):
-                    y_t += weight_view[ix] * (((drift_view[ix, 0] - (g_t_view[k] * y_t)) * delta_t) + (sqrt_st/2 * gaussian_values[m]))
-                    y_d += weight_view[ix] * (((drift_view[ix, 1] - (g_d_view[k] * y_d)) * delta_t) + (sqrt_st/2 * gaussian_values[m]))
+                while (y >= (-1) * boundary_all_view[k, ix]) and (y <= boundary_all_view[k, ix]) and (t_particle <= deadline_tmp):
+                    y_t += weight_all_view[k, ix] * (((drift_all_view[k, ix, 0] - (g_t_view[k] * y_t)) * delta_t) + (sqrt_st/2 * gaussian_values[m]))
+                    y_d += weight_all_view[k, ix] * (((drift_all_view[k, ix, 1] - (g_d_view[k] * y_d)) * delta_t) + (sqrt_st/2 * gaussian_values[m]))
                     y = y_start + y_t + y_d
 
                     t_particle += delta_t
@@ -1451,33 +1493,11 @@ def ddm_flex_weight_dualleak(
                     rts_view[n, k, 0] = -999
     else:
         # ============ PARALLEL PATH (OpenMP + per-thread GSL Ziggurat) =========
-        # Precompute drift(2-col)/weight/boundary for ALL trials up front. The
-        # weight callback draws from weight_rng in ascending-k order — exactly as
-        # the sequential path — so weights are identical across paths for a given
-        # random_state. Only the (shared, per-step) diffusion noise differs (GSL
-        # Ziggurat vs libc rand); trajectory recording is unavailable here.
-        drift_all = np.zeros((n_trials, num_draws, 2), dtype = DTYPE)
-        weight_all = np.zeros((n_trials, num_draws), dtype = DTYPE)
-        boundary_all = np.zeros((n_trials, num_draws), dtype = DTYPE)
-        for k in range(n_trials):
-            drift_params_tmp = {key: drift_params[key][k] for key in drift_params.keys()}
-            drift_all[k, :, :] = drift_fun(t = t_s, **drift_params_tmp).astype(DTYPE)
-
-            weight_params_tmp = {key: weight_params[key][k] for key in weight_params.keys()}
-            weight_all[k, :] = weight_fun(t = t_s, rng = weight_rng, **weight_params_tmp).astype(DTYPE)
-
-            boundary_params_tmp = {key: boundary_params[key][k] for key in boundary_params.keys()}
-            if boundary_multiplicative:
-                boundary_all[k, :] = np.multiply(a_view[k], boundary_fun(t = t_s, **boundary_params_tmp)).astype(DTYPE)
-            else:
-                boundary_all[k, :] = np.add(a_view[k], boundary_fun(t = t_s, **boundary_params_tmp)).astype(DTYPE)
-
+        # Reads the shared precompute above; only the (shared, per-step) diffusion
+        # noise differs from the sequential path (GSL Ziggurat vs libc rand), by
+        # design. Trajectory recording is unavailable in this path.
         deadline_tmp_arr = np.minimum(max_t, np.subtract(deadline, t)).astype(DTYPE)
         sqrt_st_arr = np.multiply(delta_t_sqrt, s).astype(DTYPE)
-
-        drift_all_view = drift_all
-        weight_all_view = weight_all
-        boundary_all_view = boundary_all
         deadline_tmp_view = deadline_tmp_arr
         sqrt_st_view = sqrt_st_arr
 
@@ -1536,12 +1556,12 @@ def ddm_flex_weight_dualleak(
         for i_thread in range(c_n_threads):
             ssms_rng_free(&rng_states[i_thread])
 
-        # Expose the last trial's precompute in the metadata arrays, matching the
-        # sequential path (which leaves drift/weight/boundary at trial n-1).
-        if n_trials > 0:
-            boundary[:] = boundary_all[n_trials - 1, :]
-            drift[:, :] = drift_all[n_trials - 1, :, :]
-            weight[:] = weight_all[n_trials - 1, :]
+    # Expose the last trial's precompute in the metadata arrays (both paths),
+    # matching the legacy behavior (drift/weight/boundary left at trial n-1).
+    if n_trials > 0:
+        boundary[:] = boundary_all[n_trials - 1, :]
+        drift[:, :] = drift_all[n_trials - 1, :, :]
+        weight[:] = weight_all[n_trials - 1, :]
 
     if return_option == 'full':
         return {'rts': rts, 'choices': choices,  'metadata': {'a': a,

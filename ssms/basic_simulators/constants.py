@@ -10,4 +10,5 @@ DEFAULT_SIM_PARAMS: dict[str, Any] = {
     "return_option": "full",
     "smooth_unif": False,
     "n_threads": 1,
+    "vectorize_precompute": True,
 }

@@ -909,6 +909,336 @@ def softmax_gate(
     return soft_gate(t, onset, wtaurise, wmin)
 
 
+# ===========================================================================
+# Batched (vectorized-over-trials) siblings
+#
+# The cssm flex_weight sampler can precompute drift/weight for ALL trials in one
+# call instead of a per-trial Python loop. A scalar function opts in by carrying
+# a ``.batched`` attribute pointing at its batched sibling, which accepts
+# ``(n_trials,)`` parameter arrays and returns ``(n_trials, len(t))`` (drift
+# ``sum_drifts=False`` -> ``(n_trials, len(t), 2)``). The sampler falls back to
+# the scalar per-trial loop for any function without a ``.batched`` sibling, so
+# the two can be mixed freely and A/B-tested against each other.
+#
+# The deterministic construction is reproduced in CLOSED FORM (no ``lfilter``):
+#   * every stimflex drift uses ``tau_rise=0`` -> the on-window is unfiltered and
+#     the post-offset tail is an analytic exponential (matches ``piecewise_lowpass``
+#     exactly);
+#   * ``soft_gate`` is a causal EMA of a step, i.e. an exponential rise
+#     ``H*(1-exp(-m*dt/tau))`` (matches ``causal_lowpass`` of the step exactly).
+# So the only departure from the scalar functions is the RNG draw *order* (one
+# batched draw vs n_trials scalar draws) -> distributionally equal, not bitwise.
+# ===========================================================================
+
+
+def _b1d(x: np.ndarray | float, n: int) -> np.ndarray:
+    """Coerce a scalar/1d param to a length-``n`` float64 array (broadcasting length-1)."""
+    x = np.atleast_1d(np.asarray(x, dtype=float))
+    if x.shape[0] == 1 and n > 1:
+        x = np.broadcast_to(x, (n,))
+    return x
+
+
+def _filtered_pulse_b(
+    t: np.ndarray,
+    coh: np.ndarray,
+    weight: np.ndarray,
+    onset: np.ndarray,
+    offset: np.ndarray,
+    tau_fall: np.ndarray,
+) -> np.ndarray:
+    """Batched ``filtered_pulse`` for the ``tau_rise=0`` case (all stimflex drifts).
+
+    ``coh``/``onset``/``offset``/``tau_fall`` are ``(n,)``; ``weight`` is ``(n, 1)``
+    (static drift) or ``(n, len(t))`` (dynamic drift). Returns ``(n, len(t))``.
+    Reproduces ``piecewise_lowpass(boxcar(coh)*weight, offset, tau_rise=0, tau_fall)``:
+    the on-window (``t <= offset``) is unfiltered, the tail (``t > offset``) decays
+    analytically from the last on-window value.
+    """
+    N = t.shape[0]
+    dt = t[1] - t[0] if N > 1 else 0.1
+    tt = t[None, :]
+    box = (tt >= onset[:, None]) & (tt <= offset[:, None])          # coherence support
+    raw = box * (coh[:, None] * weight)                            # (n, N)
+    on_region = tt <= offset[:, None]                              # piecewise_lowpass `on`
+    n_on = on_region.sum(axis=1)                                   # (n,)
+    idx_last = np.clip(n_on - 1, 0, N - 1)
+    val_last = raw[np.arange(raw.shape[0]), idx_last]              # value at offset index
+    j = np.arange(N)[None, :]
+    k = np.maximum(j - n_on[:, None] + 1, 0)                       # 1,2,.. into the tail
+    decay = val_last[:, None] * np.exp(-k * dt / tau_fall[:, None])
+    return np.where(on_region, raw, decay)
+
+
+def _soft_gate_b(
+    t: np.ndarray,
+    onset: np.ndarray,
+    tau_rise: np.ndarray,
+    wmin: np.ndarray,
+) -> np.ndarray:
+    """Batched ``soft_gate``: analytic exponential rise from ``wmin`` toward 1 at ``onset``.
+
+    ``onset``/``tau_rise``/``wmin`` are ``(n,)`` (``onset=inf`` -> gate never opens,
+    stays at ``wmin``). Returns ``(n, len(t))``. The causal EMA of a step of height
+    ``1-wmin`` is ``(1-wmin)*(1-exp(-m*dt/tau_rise))``; ``tau_rise=0`` is the sharp step.
+    """
+    N = t.shape[0]
+    dt = t[1] - t[0] if N > 1 else 0.1
+    onset = np.asarray(onset, dtype=float)
+    tau_rise = np.asarray(tau_rise, dtype=float)
+    onset_idx = np.searchsorted(t, onset)                          # inf -> N (never opens)
+    j = np.arange(N)[None, :]
+    open_mask = j >= onset_idx[:, None]
+    m = np.maximum(j - onset_idx[:, None] + 1, 0)                  # steps since opening
+    tau0 = (tau_rise <= 0)[:, None]
+    tau_safe = np.where(tau_rise > 0, tau_rise, 1.0)[:, None]
+    frac = np.where(open_mask, np.where(tau0, 1.0, 1.0 - np.exp(-m * dt / tau_safe)), 0.0)
+    wmin_c = np.asarray(wmin, dtype=float)[:, None]
+    return wmin_c + (1.0 - wmin_c) * frac
+
+
+def conflict_stimflex_drift_b(
+    t: np.ndarray,
+    vt=0, vd=0, tcoh=1.0, dcoh=1.0, tonset=0, donset=0,
+    toffset=None, doffset=None, vtaufall=0.1, sum_drifts=True,
+) -> np.ndarray:
+    """Batched :func:`conflict_stimflex_drift` (see that function). Params ``(n,)`` -> ``(n, len(t))``."""
+    t = np.asarray(t, dtype=float)
+    n = max(np.size(x) for x in (vt, vd, tcoh, dcoh, tonset, donset, vtaufall))
+    if toffset is None:
+        toffset = t.max()
+    if doffset is None:
+        doffset = t.max()
+    vt, vd, tcoh, dcoh, tonset, donset, toffset, doffset, vtaufall = (
+        _b1d(x, n) for x in (vt, vd, tcoh, dcoh, tonset, donset, toffset, doffset, vtaufall)
+    )
+    tdrift = _filtered_pulse_b(t, tcoh, vt[:, None], tonset, toffset, vtaufall)
+    ddrift = _filtered_pulse_b(t, dcoh, vd[:, None], donset, doffset, vtaufall)
+    if sum_drifts:
+        return tdrift + ddrift
+    return np.stack((tdrift, ddrift), axis=-1)
+
+
+def logit_gate_b(
+    t: np.ndarray,
+    tonset=0.0, donset=0.0, wmin=0.0, wtaurise=0.05, wtarget=0, rng=None,
+) -> np.ndarray:
+    """Batched :func:`logit_gate` (see that function). Params ``(n,)`` -> ``(n, len(t))``.
+
+    Draws one target-vs-distractor selection per trial from a single ``rng.random(n)``
+    call (``p(target) = expit(wtarget) = softmax([wtarget, 0])[0]``).
+    """
+    t = np.asarray(t, dtype=float)
+    if rng is None:
+        rng = np.random.default_rng()
+    n = max(np.size(x) for x in (tonset, donset, wmin, wtaurise, wtarget))
+    tonset, donset, wmin, wtaurise, wtarget = (
+        _b1d(x, n) for x in (tonset, donset, wmin, wtaurise, wtarget)
+    )
+    onset = np.where(rng.random(n) < expit(wtarget), tonset, donset)
+    return _soft_gate_b(t, onset, wtaurise, wmin)
+
+
+def _boxcar_b(t: np.ndarray, onset: np.ndarray, offset: np.ndarray, height: np.ndarray) -> np.ndarray:
+    """Batched ``boxcar``: ``height`` on ``[onset, offset]``. Params ``(n,)`` -> ``(n, len(t))``."""
+    tt = t[None, :]
+    return ((tt >= onset[:, None]) & (tt <= offset[:, None])) * height[:, None]
+
+
+def _ds_support_b(t: np.ndarray, init_p: np.ndarray, fix_point: np.ndarray, slope: np.ndarray) -> np.ndarray:
+    """Batched ``ds_support_analytic``: ``(init_p-fix_point)*exp(-slope*t)+fix_point``."""
+    return (init_p - fix_point)[:, None] * np.exp(-(slope[:, None] * t[None, :])) + fix_point[:, None]
+
+
+def _linear_scale_b(t: np.ndarray, level: np.ndarray, tilt: np.ndarray, maxstimoffset: np.ndarray) -> np.ndarray:
+    """Batched ``linear_scale``: cue-locked line ``level*(1 + tilt*(2u-1))``, ``u=t/maxstimoffset``."""
+    u = t[None, :] / maxstimoffset[:, None]
+    return level[:, None] * (1.0 + tilt[:, None] * (2.0 * u - 1.0))
+
+
+def _pwlin_scale_b(t: np.ndarray, vstart: np.ndarray, vplateau: np.ndarray, tau: np.ndarray,
+                   maxstimoffset: np.ndarray) -> np.ndarray:
+    """Batched ``pwlin_scale``: ramp ``vstart``->``vplateau`` until knot ``tau``, then plateau."""
+    u = t[None, :] / maxstimoffset[:, None]
+    tau_c = tau[:, None]
+    return vstart[:, None] + (vplateau - vstart)[:, None] * np.minimum(u, tau_c) / tau_c
+
+
+def _sample_hazard_onset_b(t: np.ndarray, rate: np.ndarray, rng) -> np.ndarray:
+    """Batched ``sample_hazard_onset``: inverse-CDF of the cumulative hazard, per row.
+
+    ``rate`` is ``(n, len(t))``; returns ``(n,)`` opening times (``inf`` if never opens).
+    ``cum`` is monotone per row (cumsum of a nonnegative rate) so the per-row
+    ``searchsorted(cum, E)`` is the vectorized ``(cum < E).sum(axis=1)``.
+    """
+    N = t.shape[0]
+    dt = t[1] - t[0] if N > 1 else 0.1
+    cum = np.cumsum(rate, axis=1) * dt
+    e = rng.exponential(size=rate.shape[0])
+    idx = (cum < e[:, None]).sum(axis=1)
+    return np.where(idx < N, t[np.clip(idx, 0, N - 1)], np.inf)
+
+
+def conflict_stimflex_dual_drift_b(t: np.ndarray, **kwargs) -> np.ndarray:
+    """Batched :func:`conflict_stimflex_dual_drift` -> ``(n, len(t), 2)`` (target, distractor)."""
+    return conflict_stimflex_drift_b(t, sum_drifts=False, **kwargs)
+
+
+def conflict_dsstimflex_drift_b(
+    t: np.ndarray,
+    tinit=0, dinit=0, tslope=1, dslope=1, tfixedp=1, dfixedp=0,
+    tcoh=1.0, dcoh=1.0, tonset=0, donset=0, toffset=None, doffset=None,
+    vtaufall=0.1, sum_drifts=True,
+) -> np.ndarray:
+    """Batched :func:`conflict_dsstimflex_drift` (exponential cue-locked weight)."""
+    t = np.asarray(t, dtype=float)
+    n = max(np.size(x) for x in (tinit, dinit, tslope, dslope, tfixedp, dfixedp,
+                                 tcoh, dcoh, tonset, donset, vtaufall))
+    if toffset is None:
+        toffset = t.max()
+    if doffset is None:
+        doffset = t.max()
+    (tinit, dinit, tslope, dslope, tfixedp, dfixedp, tcoh, dcoh,
+     tonset, donset, toffset, doffset, vtaufall) = (
+        _b1d(x, n) for x in (tinit, dinit, tslope, dslope, tfixedp, dfixedp, tcoh, dcoh,
+                             tonset, donset, toffset, doffset, vtaufall)
+    )
+    tdrift = _filtered_pulse_b(t, tcoh, _ds_support_b(t, tinit, tfixedp, tslope), tonset, toffset, vtaufall)
+    ddrift = _filtered_pulse_b(t, dcoh, _ds_support_b(t, dinit, dfixedp, dslope), donset, doffset, vtaufall)
+    if sum_drifts:
+        return tdrift + ddrift
+    return np.stack((tdrift, ddrift), axis=-1)
+
+
+def conflict_dsstimflexlin_drift_b(
+    t: np.ndarray,
+    tlevel=1.0, dlevel=1.0, ttilt=0.0, dtilt=0.0,
+    tcoh=1.0, dcoh=1.0, tonset=0, donset=0, toffset=None, doffset=None,
+    maxstimoffset=1.0, vtaufall=0.1, sum_drifts=True,
+) -> np.ndarray:
+    """Batched :func:`conflict_dsstimflexlin_drift` (linear cue-locked weight)."""
+    t = np.asarray(t, dtype=float)
+    n = max(np.size(x) for x in (tlevel, dlevel, ttilt, dtilt, tcoh, dcoh,
+                                 tonset, donset, maxstimoffset, vtaufall))
+    if toffset is None:
+        toffset = t.max()
+    if doffset is None:
+        doffset = t.max()
+    (tlevel, dlevel, ttilt, dtilt, tcoh, dcoh, tonset, donset, toffset, doffset,
+     maxstimoffset, vtaufall) = (
+        _b1d(x, n) for x in (tlevel, dlevel, ttilt, dtilt, tcoh, dcoh, tonset, donset,
+                             toffset, doffset, maxstimoffset, vtaufall)
+    )
+    tdrift = _filtered_pulse_b(t, tcoh, _linear_scale_b(t, tlevel, ttilt, maxstimoffset), tonset, toffset, vtaufall)
+    ddrift = _filtered_pulse_b(t, dcoh, _linear_scale_b(t, dlevel, dtilt, maxstimoffset), donset, doffset, vtaufall)
+    if sum_drifts:
+        return tdrift + ddrift
+    return np.stack((tdrift, ddrift), axis=-1)
+
+
+def conflict_dsstimflexpwlin_drift_b(
+    t: np.ndarray,
+    tstart=1.0, dstart=1.0, tplateau=1.0, dplateau=1.0, ttau=0.5, dtau=0.5,
+    tcoh=1.0, dcoh=1.0, tonset=0, donset=0, toffset=None, doffset=None,
+    maxstimoffset=1.0, vtaufall=0.1, sum_drifts=True,
+) -> np.ndarray:
+    """Batched :func:`conflict_dsstimflexpwlin_drift` (ramp-then-plateau cue-locked weight)."""
+    t = np.asarray(t, dtype=float)
+    n = max(np.size(x) for x in (tstart, dstart, tplateau, dplateau, ttau, dtau,
+                                 tcoh, dcoh, tonset, donset, maxstimoffset, vtaufall))
+    if toffset is None:
+        toffset = t.max()
+    if doffset is None:
+        doffset = t.max()
+    (tstart, dstart, tplateau, dplateau, ttau, dtau, tcoh, dcoh, tonset, donset,
+     toffset, doffset, maxstimoffset, vtaufall) = (
+        _b1d(x, n) for x in (tstart, dstart, tplateau, dplateau, ttau, dtau, tcoh, dcoh,
+                             tonset, donset, toffset, doffset, maxstimoffset, vtaufall)
+    )
+    tdrift = _filtered_pulse_b(t, tcoh, _pwlin_scale_b(t, tstart, tplateau, ttau, maxstimoffset), tonset, toffset, vtaufall)
+    ddrift = _filtered_pulse_b(t, dcoh, _pwlin_scale_b(t, dstart, dplateau, dtau, maxstimoffset), donset, doffset, vtaufall)
+    if sum_drifts:
+        return tdrift + ddrift
+    return np.stack((tdrift, ddrift), axis=-1)
+
+
+def softmax_gate_b(
+    t: np.ndarray,
+    tonset=0.0, donset=0.0, wmin=0.0, wtaurise=0.05, wtarget=0, wdistractor=0, rng=None,
+) -> np.ndarray:
+    """Batched :func:`softmax_gate`: 3-class onset selection, one categorical draw per trial."""
+    t = np.asarray(t, dtype=float)
+    if rng is None:
+        rng = np.random.default_rng()
+    n = max(np.size(x) for x in (tonset, donset, wmin, wtaurise, wtarget, wdistractor))
+    tonset, donset, wmin, wtaurise, wtarget, wdistractor = (
+        _b1d(x, n) for x in (tonset, donset, wmin, wtaurise, wtarget, wdistractor)
+    )
+    cands = np.stack([np.minimum(tonset, donset), tonset, donset], axis=1)     # (n, 3)
+    p = softmax(np.stack([np.zeros(n), wtarget, wdistractor], axis=1), axis=1)  # (n, 3)
+    idx = np.clip((rng.random(n)[:, None] >= np.cumsum(p, axis=1)).sum(axis=1), 0, 2)
+    onset = cands[np.arange(n), idx]
+    return _soft_gate_b(t, onset, wtaurise, wmin)
+
+
+def hazard_gate_b(
+    t: np.ndarray,
+    tonset=0.0, toffset=1.0, tcoh=1.0, donset=0.0, doffset=1.0, dcoh=1.0,
+    wbaseline=0, wtarget=1, wdistractor=1, wmin=0, wtaurise=0.05, rng=None,
+) -> np.ndarray:
+    """Batched :func:`hazard_gate`: log-linear hazard over the full coherence boxcars."""
+    t = np.asarray(t, dtype=float)
+    if rng is None:
+        rng = np.random.default_rng()
+    n = max(np.size(x) for x in (tonset, toffset, tcoh, donset, doffset, dcoh,
+                                 wbaseline, wtarget, wdistractor, wmin, wtaurise))
+    (tonset, toffset, tcoh, donset, doffset, dcoh, wbaseline, wtarget, wdistractor,
+     wmin, wtaurise) = (
+        _b1d(x, n) for x in (tonset, toffset, tcoh, donset, doffset, dcoh,
+                             wbaseline, wtarget, wdistractor, wmin, wtaurise)
+    )
+    tenergy = _boxcar_b(t, tonset, toffset, np.abs(tcoh))
+    denergy = _boxcar_b(t, donset, doffset, np.abs(dcoh))
+    rate = np.exp(tenergy * wtarget[:, None] + denergy * wdistractor[:, None] + wbaseline[:, None])
+    onset = _sample_hazard_onset_b(t, rate, rng)
+    return _soft_gate_b(t, onset, wtaurise, wmin)
+
+
+def hazard2_b(
+    t: np.ndarray,
+    tonset=0.0, toffset=1.0, tcoh=1.0, donset=0.0, doffset=1.0, dcoh=1.0,
+    wbaseline=0, wtarget=1, wdistractor=1, wtauonset=0.05, wmin=0, wtaurise=0.05, rng=None,
+) -> np.ndarray:
+    """Batched :func:`hazard2`: log-linear hazard over short post-onset energy windows."""
+    t = np.asarray(t, dtype=float)
+    if rng is None:
+        rng = np.random.default_rng()
+    n = max(np.size(x) for x in (tonset, tcoh, donset, dcoh, wbaseline, wtarget,
+                                 wdistractor, wtauonset, wmin, wtaurise))
+    (tonset, tcoh, donset, dcoh, wbaseline, wtarget, wdistractor,
+     wtauonset, wmin, wtaurise) = (
+        _b1d(x, n) for x in (tonset, tcoh, donset, dcoh, wbaseline, wtarget,
+                             wdistractor, wtauonset, wmin, wtaurise)
+    )
+    tenergy = _boxcar_b(t, tonset, tonset + wtauonset, np.abs(tcoh))
+    denergy = _boxcar_b(t, donset, donset + wtauonset, np.abs(dcoh))
+    rate = np.exp(tenergy * wtarget[:, None] + denergy * wdistractor[:, None] + wbaseline[:, None])
+    onset = _sample_hazard_onset_b(t, rate, rng)
+    return _soft_gate_b(t, onset, wtaurise, wmin)
+
+
+# Advertise the batched siblings (consumed by the cssm flex_weight precompute).
+conflict_stimflex_drift.batched = conflict_stimflex_drift_b
+conflict_stimflex_dual_drift.batched = conflict_stimflex_dual_drift_b
+conflict_dsstimflex_drift.batched = conflict_dsstimflex_drift_b
+conflict_dsstimflexlin_drift.batched = conflict_dsstimflexlin_drift_b
+conflict_dsstimflexpwlin_drift.batched = conflict_dsstimflexpwlin_drift_b
+logit_gate.batched = logit_gate_b
+softmax_gate.batched = softmax_gate_b
+hazard_gate.batched = hazard_gate_b
+hazard2.batched = hazard2_b
+
+
 # Type alias for drift functions
 DriftFunction = Callable[..., np.ndarray]
 

@@ -584,6 +584,7 @@ def simulator(
     smooth_unif: bool = True,
     random_state: int | None = None,
     n_threads: int = 1,
+    vectorize_precompute: bool = True,
 ) -> dict:
     """Basic data simulator for the models included in HDDM.
 
@@ -620,6 +621,12 @@ def simulator(
             otherwise it silently falls back to single-threaded. n_threads=1 is
             the byte-for-byte sequential baseline; n_threads>1 uses a per-thread
             GSL RNG (a different noise stream, equal in distribution).
+        vectorize_precompute: bool <default=True>
+            Flex-weight simulators only. When True, drift/weight callables that
+            expose a ``.batched`` sibling are precomputed for all trials in one
+            vectorized call; otherwise (or for callables without a sibling) the
+            per-trial Python loop is used. False forces the per-trial loop
+            (the legacy, byte-for-byte precompute) — for A/B testing.
 
     Return
     ------
