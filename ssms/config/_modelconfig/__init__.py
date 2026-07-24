@@ -14,6 +14,8 @@ from .conflict import (
     get_conflict_stimflex_softmax_config,
     get_conflict_stimflex_hazard_config,
     get_conflict_stimflex_hazard2_config,
+    get_conflict_dsstimflexlin_hazard2_config,
+    get_conflict_dsstimflexpwlin_hazard2_config,
     get_conflict_stimflex_logit_dualleak_config,
 )
 from .full_ddm import (
@@ -204,6 +206,8 @@ def get_model_config():
         "conflict_stimflex_softmax": get_conflict_stimflex_softmax_config(),
         "conflict_stimflex_hazard": get_conflict_stimflex_hazard_config(),
         "conflict_stimflex_hazard2": get_conflict_stimflex_hazard2_config(),
+        "conflict_dsstimflexlin_hazard2": get_conflict_dsstimflexlin_hazard2_config(),
+        "conflict_dsstimflexpwlin_hazard2": get_conflict_dsstimflexpwlin_hazard2_config(),
         "conflict_stimflex_logit_dualleak": get_conflict_stimflex_logit_dualleak_config(),
         "ornstein": get_ornstein_config(),
         "ornstein_angle": get_ornstein_angle_config(),
