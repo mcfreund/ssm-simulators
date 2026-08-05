@@ -59,6 +59,7 @@ class SimpleThetaProcessor(AbstractThetaProcessor):
         "conflict_stimflex_softmax",
         "conflict_stimflex_hazard",
         "conflict_stimflex_hazard2",
+        "conflict_dsstimflexlin_softmax",
         "conflict_dsstimflexlin_hazard2",
         "conflict_dsstimflexpwlin_hazard2",
         "conflict_stimflex_logit_dualleak",

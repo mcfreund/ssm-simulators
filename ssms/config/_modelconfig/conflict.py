@@ -318,8 +318,24 @@ def get_conflict_stimflex_hazard2_config():
 # ---------------------------------------------------------------------------
 # The drift base and the gate are orthogonal ingredients of ddm_flex_weight, so a within-trial
 # dynamic drift (dsstimflexlin / dsstimflexpwlin) can be paired with the focal-window hazard2 gate
-# just as it is with logit -- pure config composition, no new drift/weight/kernel code. Both the
-# drift funs and the hazard2 gate already exist above.
+# or the 3-way softmax gate just as it is with logit -- pure config composition, no new
+# drift/weight/kernel code. Both the drift funs and the gates already exist above.
+
+def get_conflict_dsstimflexlin_softmax_config():
+    return _new_config(
+        name="conflict_dsstimflexlin_softmax",
+        param_dict=_core_params() | _dsstimflexlin_drift_params() | _softmax_gate_params(),
+        boundary_name="constant",
+        boundary=bf.constant,
+        drift_name="conflict_dsstimflexlin_drift",
+        drift_fun=df.conflict_dsstimflexlin_drift,
+        weight_name="softmax_gate",
+        weight_fun=df.softmax_gate,
+        choices=[-1, 1],
+        n_particles=1,
+        simulator=cssm.ddm_flex_weight,
+    )
+
 
 def get_conflict_dsstimflexlin_hazard2_config():
     return _new_config(
