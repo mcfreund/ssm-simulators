@@ -353,6 +353,22 @@ def get_conflict_dsstimflexlin_hazard2_config():
     )
 
 
+def get_conflict_dsstimflexpwlin_softmax_config():
+    return _new_config(
+        name="conflict_dsstimflexpwlin_softmax",
+        param_dict=_core_params() | _dsstimflexpwlin_drift_params() | _softmax_gate_params(),
+        boundary_name="constant",
+        boundary=bf.constant,
+        drift_name="conflict_dsstimflexpwlin_drift",
+        drift_fun=df.conflict_dsstimflexpwlin_drift,
+        weight_name="softmax_gate",
+        weight_fun=df.softmax_gate,
+        choices=[-1, 1],
+        n_particles=1,
+        simulator=cssm.ddm_flex_weight,
+    )
+
+
 def get_conflict_dsstimflexpwlin_hazard2_config():
     return _new_config(
         name="conflict_dsstimflexpwlin_hazard2",
