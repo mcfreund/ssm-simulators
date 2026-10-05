@@ -203,6 +203,15 @@ def _delay_gate_params():
     )
 
 
+def _wait_gate_params():
+    """Gate opening at target onset w.p. ptonset, else at the second onset: leak floor, rise time."""
+    return dict(
+        ptonset=_new_param(0.5, 0.0, 1.0),
+        wmin=_new_param(0.0, 0.0, 1.0),
+        wtaurise=_new_param(0.05, 1e-3, 0.5),
+    )
+
+
 def _hazard_gate_params():
     """Continuous detection hazard: log baseline + per-stimulus log-hazard-ratios + gate shape."""
     return dict(
@@ -387,6 +396,22 @@ def get_conflict_bufferlin_delaygate_config():
         drift_fun=df.conflict_bufferlin_drift,
         weight_name="delay_gate",
         weight_fun=df.delay_gate,
+        choices=[-1, 1],
+        n_particles=1,
+        simulator=cssm.ddm_flex_weight,
+    )
+
+
+def get_conflict_bufferlin_waitgate_config():
+    return _new_config(
+        name="conflict_bufferlin_waitgate",
+        param_dict=_core_params() | _bufferlin_drift_params() | _wait_gate_params(),
+        boundary_name="constant",
+        boundary=bf.constant,
+        drift_name="conflict_bufferlin_drift",
+        drift_fun=df.conflict_bufferlin_drift,
+        weight_name="wait_gate",
+        weight_fun=df.wait_gate,
         choices=[-1, 1],
         n_particles=1,
         simulator=cssm.ddm_flex_weight,

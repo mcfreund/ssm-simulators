@@ -995,6 +995,47 @@ def delay_gate(
     return soft_gate(t, max(wdelay, min(tonset, donset)), wtaurise, wmin)
 
 
+def wait_gate(
+    t: np.ndarray | None,
+    tonset: float = 0.0,
+    donset: float = 0.0,
+    ptonset: float = 0.5,
+    wmin: float = 0.0,
+    wtaurise: float = 0.05,
+    rng=None,  # injected by cssm; unseeded fallback only when called standalone
+) -> np.ndarray:
+    """Gate that opens at the target onset with probability ``ptonset``, else at the second onset::
+
+        open = tonset               with probability ptonset
+             = max(tonset, donset)  otherwise
+
+    The opening never precedes the target. On distractor-first trials both candidates are the
+    target onset, so ``ptonset`` acts only on target-first trials. One uniform is drawn per trial
+    regardless of onset order. The chosen onset is passed to :func:`soft_gate`.
+
+    Arguments
+    ---------
+        t: np.ndarray
+            Timepoints (uniform grid).
+        tonset, donset: float
+            Target/distractor onsets.
+        ptonset: float
+            Probability of opening at the target onset rather than the second onset.
+        wmin: float
+            Leaky-closed floor before opening.
+        wtaurise: float
+            Rise time of the open transition.
+        rng: np.random.Generator
+            Injected by cssm; unseeded fallback only when called standalone.
+    """
+    if t is None:
+        t = np.arange(0, 20, 0.005)
+    if rng is None:
+        rng = np.random.default_rng()
+    onset = tonset if rng.random() < ptonset else max(tonset, donset)
+    return soft_gate(t, onset, wtaurise, wmin)
+
+
 # ===========================================================================
 # Batched (vectorized-over-trials) siblings
 #
@@ -1303,6 +1344,22 @@ def delay_gate_b(
     return _soft_gate_b(t, np.maximum(wdelay, np.minimum(tonset, donset)), wtaurise, wmin)
 
 
+def wait_gate_b(
+    t: np.ndarray,
+    tonset=0.0, donset=0.0, ptonset=0.5, wmin=0.0, wtaurise=0.05, rng=None,
+) -> np.ndarray:
+    """Batched :func:`wait_gate`: one uniform per trial picks target onset vs second onset."""
+    t = np.asarray(t, dtype=float)
+    if rng is None:
+        rng = np.random.default_rng()
+    n = max(np.size(x) for x in (tonset, donset, ptonset, wmin, wtaurise))
+    tonset, donset, ptonset, wmin, wtaurise = (
+        _b1d(x, n) for x in (tonset, donset, ptonset, wmin, wtaurise)
+    )
+    onset = np.where(rng.random(n) < ptonset, tonset, np.maximum(tonset, donset))
+    return _soft_gate_b(t, onset, wtaurise, wmin)
+
+
 def hazard_gate_b(
     t: np.ndarray,
     tonset=0.0, toffset=1.0, tcoh=1.0, donset=0.0, doffset=1.0, dcoh=1.0,
@@ -1359,6 +1416,7 @@ logit_gate.batched = logit_gate_b
 softmax_gate.batched = softmax_gate_b
 conflict_bufferlin_drift.batched = conflict_bufferlin_drift_b
 delay_gate.batched = delay_gate_b
+wait_gate.batched = wait_gate_b
 hazard_gate.batched = hazard_gate_b
 hazard2.batched = hazard2_b
 

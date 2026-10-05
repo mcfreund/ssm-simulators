@@ -63,6 +63,7 @@ class SimpleThetaProcessor(AbstractThetaProcessor):
         "conflict_dsstimflexlin_hazard2",
         "conflict_dsstimflexpwlin_softmax",
         "conflict_bufferlin_delaygate",
+        "conflict_bufferlin_waitgate",
         "conflict_dsstimflexpwlin_hazard2",
         "conflict_stimflex_logit_dualleak",
         "shrink_spot",

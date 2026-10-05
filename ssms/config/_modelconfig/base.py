@@ -175,4 +175,8 @@ weight_config = {
         "fun": df.delay_gate,
         "params": ["tonset", "donset", "wdelay", "wmin", "wtaurise"],
     },
+    "wait_gate": {
+        "fun": df.wait_gate,
+        "params": ["tonset", "donset", "ptonset", "wmin", "wtaurise"],
+    },
 }
