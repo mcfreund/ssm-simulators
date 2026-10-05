@@ -136,6 +136,21 @@ def _dsstimflexlin_drift_params():
     )
 
 
+def _bufferlin_drift_params():
+    """Ideal-buffer drift with clipped linear cue-locked dynamics; ``maxstimoffset`` is supplied."""
+    return dict(
+        tlevel=_new_param(2.0, 0.0, 20.0),
+        dlevel=_new_param(2.0, 0.0, 20.0),
+        ttilt=_new_param(0.0, -1.0, 1.0),
+        dtilt=_new_param(0.0, -1.0, 1.0),
+        tcoh=_new_param(0.5, -1.0, 1.0),
+        dcoh=_new_param(-0.5, -1.0, 1.0),
+        tonset=_new_param(0.0, 0.0, 1.0),
+        donset=_new_param(0.0, 0.0, 1.0),
+        maxstimoffset=_new_param(1.0 + 16 / 60, 0.0, 20.0),
+    )
+
+
 def _dsstimflexpwlin_drift_params():
     """Piecewise-linear (ramp-then-plateau) cue-locked drift; ``maxstimoffset`` is supplied.
 
@@ -176,6 +191,15 @@ def _softmax_gate_params():
         wtaurise=_new_param(0.05, 1e-3, 0.5),
         wtarget=_new_param(0.0, -10.0, 10.0),
         wdistractor=_new_param(0.0, -10.0, 10.0),
+    )
+
+
+def _delay_gate_params():
+    """Deterministic gate opening at max(wdelay, first onset): delay, leak floor, rise time."""
+    return dict(
+        wdelay=_new_param(0.0, 0.0, 1.0),
+        wmin=_new_param(0.5, 0.0, 1.0),
+        wtaurise=_new_param(0.05, 1e-3, 0.5),
     )
 
 
@@ -347,6 +371,22 @@ def get_conflict_dsstimflexlin_hazard2_config():
         drift_fun=df.conflict_dsstimflexlin_drift,
         weight_name="hazard2",
         weight_fun=df.hazard2,
+        choices=[-1, 1],
+        n_particles=1,
+        simulator=cssm.ddm_flex_weight,
+    )
+
+
+def get_conflict_bufferlin_delaygate_config():
+    return _new_config(
+        name="conflict_bufferlin_delaygate",
+        param_dict=_core_params() | _bufferlin_drift_params() | _delay_gate_params(),
+        boundary_name="constant",
+        boundary=bf.constant,
+        drift_name="conflict_bufferlin_drift",
+        drift_fun=df.conflict_bufferlin_drift,
+        weight_name="delay_gate",
+        weight_fun=df.delay_gate,
         choices=[-1, 1],
         n_particles=1,
         simulator=cssm.ddm_flex_weight,

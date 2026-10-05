@@ -81,6 +81,20 @@ drift_config = {
             "vtaufall",
         ],
     },
+    "conflict_bufferlin_drift": {
+        "fun": df.conflict_bufferlin_drift,
+        "params": [
+            "tlevel",
+            "dlevel",
+            "ttilt",
+            "dtilt",
+            "tcoh",
+            "dcoh",
+            "tonset",
+            "donset",
+            "maxstimoffset",
+        ],
+    },
     "conflict_dsstimflexpwlin_drift": {
         "fun": df.conflict_dsstimflexpwlin_drift,
         "params": [
@@ -156,5 +170,9 @@ weight_config = {
     "softmax_gate": {
         "fun": df.softmax_gate,
         "params": ["tonset", "donset", "wmin", "wtaurise", "wtarget", "wdistractor"],
+    },
+    "delay_gate": {
+        "fun": df.delay_gate,
+        "params": ["tonset", "donset", "wdelay", "wmin", "wtaurise"],
     },
 }

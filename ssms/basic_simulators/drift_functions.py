@@ -672,6 +672,57 @@ def conflict_dsstimflexpwlin_drift(
         return np.column_stack((tdrift, ddrift))
 
 
+def conflict_bufferlin_drift(
+    t: np.ndarray | None,
+    tlevel: float = 1.0,
+    dlevel: float = 1.0,
+    ttilt: float = 0.0,
+    dtilt: float = 0.0,
+    tcoh: float = 1.0,
+    dcoh: float = 1.0,
+    tonset: float = 0,
+    donset: float = 0,
+    maxstimoffset: float = 1.0,
+    sum_drifts: bool = True,
+) -> np.ndarray:
+    """Conflict drift from ideal (noiseless, non-decaying) sensory buffers with linear dynamics.
+
+    Each input's buffer is a step at its onset, signed by coherence, and holds for the rest of the
+    trial (no stimulus offset, no post-offset tail). Its drift is that step times a cue-locked line
+    in (``level``, ``tilt``) clipped at zero::
+
+        u    = t / maxstimoffset
+        v(t) = coh * 1[t >= onset] * max(0, level * (1 + tilt*(2u - 1)))
+
+    ``level`` is the drift at ``t = maxstimoffset/2``. The line is evaluated past ``maxstimoffset``
+    for as long as the buffer holds, so the clip keeps ``tilt < 0`` from reversing the drift sign
+    late in the trial. ``tilt = 0`` is a static step of height ``coh * level``.
+
+    Arguments:
+    ---------
+        t: np.ndarray
+            Timepoints at which to evaluate the drift.
+        tlevel, dlevel: float
+            Target/distractor drift at the reference midpoint ``t = maxstimoffset/2``.
+        ttilt, dtilt: float
+            Target/distractor fractional tilt of the cue-locked line.
+        tcoh, dcoh: float
+            Signed coherence of the target/distractor stimulus.
+        tonset, donset: float
+            Onset time of the target/distractor stimulus (the buffer fills here).
+        maxstimoffset: float
+            Reference span normalizing the cue-locked line. Supplied by the model, not inferred.
+    """
+    if t is None:
+        t = np.arange(0, 20, 0.1)
+    tdrift = (t >= tonset) * tcoh * np.maximum(linear_scale(t, tlevel, ttilt, maxstimoffset), 0.0)
+    ddrift = (t >= donset) * dcoh * np.maximum(linear_scale(t, dlevel, dtilt, maxstimoffset), 0.0)
+    if sum_drifts:
+        return tdrift + ddrift
+    else:
+        return np.column_stack((tdrift, ddrift))
+
+
 def soft_gate(
     t: np.ndarray,
     onset: float,
@@ -907,6 +958,41 @@ def softmax_gate(
     onset = rng.choice([min(tonset, donset), tonset, donset],
                        p = softmax([0, wtarget, wdistractor]))
     return soft_gate(t, onset, wtaurise, wmin)
+
+
+def delay_gate(
+    t: np.ndarray | None,
+    tonset: float = 0.0,
+    donset: float = 0.0,
+    wdelay: float = 0.0,
+    wmin: float = 0.0,
+    wtaurise: float = 0.05,
+    rng=None,  # injected by cssm; unused (the gate is deterministic)
+) -> np.ndarray:
+    """Deterministic latching gate that opens at the first onset, but no earlier than ``wdelay``::
+
+        open = max(wdelay, min(tonset, donset))
+
+    passed to :func:`soft_gate` (latch open from ``wmin`` toward 1 with rise time ``wtaurise``).
+    ``wdelay`` is a cue-locked lower bound on when integration can begin; ``wdelay = 0`` opens at
+    the first onset.
+
+    Arguments
+    ---------
+        t: np.ndarray
+            Timepoints (uniform grid).
+        tonset, donset: float
+            Target/distractor onsets.
+        wdelay: float
+            Earliest opening time (s, cue-locked).
+        wmin: float
+            Leaky-closed floor before opening.
+        wtaurise: float
+            Rise time of the open transition.
+    """
+    if t is None:
+        t = np.arange(0, 20, 0.005)
+    return soft_gate(t, max(wdelay, min(tonset, donset)), wtaurise, wmin)
 
 
 # ===========================================================================
@@ -1181,6 +1267,42 @@ def softmax_gate_b(
     return _soft_gate_b(t, onset, wtaurise, wmin)
 
 
+def conflict_bufferlin_drift_b(
+    t: np.ndarray,
+    tlevel=1.0, dlevel=1.0, ttilt=0.0, dtilt=0.0,
+    tcoh=1.0, dcoh=1.0, tonset=0, donset=0, maxstimoffset=1.0, sum_drifts=True,
+) -> np.ndarray:
+    """Batched :func:`conflict_bufferlin_drift` (ideal buffers, clipped linear cue-locked weight)."""
+    t = np.asarray(t, dtype=float)
+    n = max(np.size(x) for x in (tlevel, dlevel, ttilt, dtilt, tcoh, dcoh,
+                                 tonset, donset, maxstimoffset))
+    tlevel, dlevel, ttilt, dtilt, tcoh, dcoh, tonset, donset, maxstimoffset = (
+        _b1d(x, n) for x in (tlevel, dlevel, ttilt, dtilt, tcoh, dcoh, tonset, donset,
+                             maxstimoffset)
+    )
+    tt = t[None, :]
+    tdrift = ((tt >= tonset[:, None]) * tcoh[:, None]
+              * np.maximum(_linear_scale_b(t, tlevel, ttilt, maxstimoffset), 0.0))
+    ddrift = ((tt >= donset[:, None]) * dcoh[:, None]
+              * np.maximum(_linear_scale_b(t, dlevel, dtilt, maxstimoffset), 0.0))
+    if sum_drifts:
+        return tdrift + ddrift
+    return np.stack((tdrift, ddrift), axis=-1)
+
+
+def delay_gate_b(
+    t: np.ndarray,
+    tonset=0.0, donset=0.0, wdelay=0.0, wmin=0.0, wtaurise=0.05, rng=None,
+) -> np.ndarray:
+    """Batched :func:`delay_gate`: opens at ``max(wdelay, min(tonset, donset))``."""
+    t = np.asarray(t, dtype=float)
+    n = max(np.size(x) for x in (tonset, donset, wdelay, wmin, wtaurise))
+    tonset, donset, wdelay, wmin, wtaurise = (
+        _b1d(x, n) for x in (tonset, donset, wdelay, wmin, wtaurise)
+    )
+    return _soft_gate_b(t, np.maximum(wdelay, np.minimum(tonset, donset)), wtaurise, wmin)
+
+
 def hazard_gate_b(
     t: np.ndarray,
     tonset=0.0, toffset=1.0, tcoh=1.0, donset=0.0, doffset=1.0, dcoh=1.0,
@@ -1235,6 +1357,8 @@ conflict_dsstimflexlin_drift.batched = conflict_dsstimflexlin_drift_b
 conflict_dsstimflexpwlin_drift.batched = conflict_dsstimflexpwlin_drift_b
 logit_gate.batched = logit_gate_b
 softmax_gate.batched = softmax_gate_b
+conflict_bufferlin_drift.batched = conflict_bufferlin_drift_b
+delay_gate.batched = delay_gate_b
 hazard_gate.batched = hazard_gate_b
 hazard2.batched = hazard2_b
 
