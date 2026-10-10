@@ -1036,6 +1036,147 @@ def wait_gate(
     return soft_gate(t, onset, wtaurise, wmin)
 
 
+def _buffermode_rates(t, sumstart, sumend, diffstart, diffend, knot, hold,
+                      sumboost, diffboost, boostfwhm, tonset, donset):
+    """Target/distractor rates ``(v_T, v_D)`` from the sum/difference modes; broadcasts over params."""
+    knot_safe = np.where(knot > 0, knot, 1.0)
+    r = np.where(knot > 0, t / knot_safe, 1.0)
+    r = np.where(hold > 0, np.minimum(r, 1.0), r)
+    sig = sumend - (sumend - sumstart) * (1.0 - r)
+    dif = diffend - (diffend - diffstart) * (1.0 - r)
+    gap = tonset - donset
+    g = np.exp(-4.0 * np.log(2.0) * gap**2 / boostfwhm**2) * (t >= np.maximum(tonset, donset))
+    sig = np.maximum(sig + sumboost * g, 0.0)
+    dif = np.clip(dif + diffboost * g, -sig, sig)
+    return (sig + dif) / 2, (sig - dif) / 2
+
+
+def conflict_buffermode_drift(
+    t: np.ndarray | None,
+    sumstart: float = 1.0,
+    sumend: float = 1.0,
+    diffstart: float = 0.0,
+    diffend: float = 0.0,
+    knot: float = 0.0,
+    hold: float = 1.0,
+    sumboost: float = 0.0,
+    diffboost: float = 0.0,
+    boostfwhm: float = 16 / 60,
+    tcoh: float = 1.0,
+    dcoh: float = 1.0,
+    tonset: float = 0,
+    donset: float = 0,
+    swap: float = 0.0,
+    sum_drifts: bool = True,
+) -> np.ndarray:
+    """Conflict drift from ideal buffers, written in sum (Σ = v_T + v_D) and difference
+    (Δ = v_T − v_D) modes::
+
+        r(t)   = t / knot, capped at 1 if hold      (knot <= 0: r = 1, static)
+        Σ(t)   = sumend  - (sumend  - sumstart)  * (1 - r(t))   + sumboost  * g
+        Δ(t)   = diffend - (diffend - diffstart) * (1 - r(t))   + diffboost * g
+        g      = exp(-4 ln2 * (tonset - donset)^2 / boostfwhm^2) * 1[t >= max(tonset, donset)]
+        Σ >= 0, Δ clipped to [-Σ, Σ]
+        v_T    = (Σ + Δ)/2,  v_D = (Σ - Δ)/2
+        drift  = tcoh * 1[t >= tonset] * v_T + dcoh * 1[t >= donset] * v_D
+
+    ``swap > 0`` exchanges the two stimuli's roles: the distractor is read at v_T and the target at v_D.
+    ``r`` is cue-locked: ``hold = 1`` ramps to the end values at ``knot`` and holds them,
+    ``hold = 0`` continues the same line past ``knot``. The clip keeps ``v_T, v_D >= 0``.
+    ``g`` is the simultaneity boost, switched on at the second onset.
+
+    Arguments:
+    ---------
+        t: np.ndarray
+            Timepoints at which to evaluate the drift.
+        sumstart, sumend: float
+            Sum mode at the cue and at ``knot``.
+        diffstart, diffend: float
+            Difference mode at the cue and at ``knot``.
+        knot: float
+            Cue-locked time (s) of the end values; ``<= 0`` is static at the end values.
+        hold: float
+            ``> 0`` holds the end values after ``knot``; ``0`` extrapolates.
+        sumboost, diffboost: float
+            Boost amplitude added to the sum/difference mode at zero onset gap.
+        boostfwhm: float
+            Full width at half maximum (s) of the boost over the onset gap.
+        tcoh, dcoh: float
+            Signed coherence of the target/distractor stimulus.
+        tonset, donset: float
+            Onset time of the target/distractor stimulus (the buffer fills here).
+        swap: float
+            ``> 0`` reads the distractor at the target's rate and the target at the distractor's.
+    """
+    if t is None:
+        t = np.arange(0, 20, 0.1)
+    if swap > 0:
+        tcoh, dcoh, tonset, donset = dcoh, tcoh, donset, tonset
+    vt, vd = _buffermode_rates(t, sumstart, sumend, diffstart, diffend, knot, hold,
+                               sumboost, diffboost, boostfwhm, tonset, donset)
+    tdrift = (t >= tonset) * tcoh * vt
+    ddrift = (t >= donset) * dcoh * vd
+    if sum_drifts:
+        return tdrift + ddrift
+    else:
+        return np.column_stack((tdrift, ddrift))
+
+
+def floor_gate(
+    t: np.ndarray | None,
+    tonset: float = 0.0,
+    donset: float = 0.0,
+    fhard: float = 0.0,
+    ftarget: float = 0.0,
+    wfirst: float = 0.0,
+    wsecond: float = 0.0,
+    wmin: float = 0.0,
+    wtaurise: float = 0.05,
+    rng=None,  # injected by cssm; unseeded fallback only when called standalone
+) -> np.ndarray:
+    """Gate that opens at the first onset, the second onset, or the target, behind a cue-locked floor::
+
+        open = max(fhard, min(tonset, donset))          with probability wfirst
+             = max(fhard, max(tonset, donset))          with probability wsecond
+             = max(fhard + ftarget, tonset)             otherwise
+
+    ``fhard`` is a floor on every trial; ``ftarget`` is an additional floor on target-opened trials
+    (a per-trial value, drawn by the caller when it varies). One uniform is drawn per trial. The
+    chosen onset is passed to :func:`soft_gate`.
+
+    Arguments
+    ---------
+        t: np.ndarray
+            Timepoints (uniform grid).
+        tonset, donset: float
+            Target/distractor onsets.
+        fhard: float
+            Cue-locked floor (s) on every opening.
+        ftarget: float
+            Additional floor (s) when the gate opens at the target.
+        wfirst, wsecond: float
+            Probability of opening at the first / second onset regardless of identity.
+        wmin: float
+            Leaky-closed floor before opening.
+        wtaurise: float
+            Rise time of the open transition.
+        rng: np.random.Generator
+            Injected by cssm; unseeded fallback only when called standalone.
+    """
+    if t is None:
+        t = np.arange(0, 20, 0.005)
+    if rng is None:
+        rng = np.random.default_rng()
+    u = rng.random()
+    if u < wfirst:
+        onset = max(fhard, min(tonset, donset))
+    elif u < wfirst + wsecond:
+        onset = max(fhard, max(tonset, donset))
+    else:
+        onset = max(fhard + ftarget, tonset)
+    return soft_gate(t, onset, wtaurise, wmin)
+
+
 # ===========================================================================
 # Batched (vectorized-over-trials) siblings
 #
@@ -1360,6 +1501,54 @@ def wait_gate_b(
     return _soft_gate_b(t, onset, wtaurise, wmin)
 
 
+def conflict_buffermode_drift_b(
+    t: np.ndarray,
+    sumstart=1.0, sumend=1.0, diffstart=0.0, diffend=0.0, knot=0.0, hold=1.0,
+    sumboost=0.0, diffboost=0.0, boostfwhm=16 / 60,
+    tcoh=1.0, dcoh=1.0, tonset=0, donset=0, swap=0.0, sum_drifts=True,
+) -> np.ndarray:
+    """Batched :func:`conflict_buffermode_drift` (ideal buffers, sum/difference modes)."""
+    t = np.asarray(t, dtype=float)
+    args = (sumstart, sumend, diffstart, diffend, knot, hold, sumboost, diffboost, boostfwhm,
+            tcoh, dcoh, tonset, donset, swap)
+    n = max(np.size(x) for x in args)
+    (sumstart, sumend, diffstart, diffend, knot, hold, sumboost, diffboost, boostfwhm,
+     tcoh, dcoh, tonset, donset, swap) = (_b1d(x, n)[:, None] for x in args)
+    sw = swap > 0
+    tcoh, dcoh = np.where(sw, dcoh, tcoh), np.where(sw, tcoh, dcoh)
+    tonset, donset = np.where(sw, donset, tonset), np.where(sw, tonset, donset)
+    tt = t[None, :]
+    static = not (np.any(knot > 0) or np.any(sumboost != 0) or np.any(diffboost != 0))
+    vt, vd = _buffermode_rates(tt[:, :1] if static else tt, sumstart, sumend, diffstart, diffend,
+                               knot, hold, sumboost, diffboost, boostfwhm, tonset, donset)
+    tdrift = (tt >= tonset) * tcoh * vt
+    ddrift = (tt >= donset) * dcoh * vd
+    if sum_drifts:
+        return tdrift + ddrift
+    return np.stack((tdrift, ddrift), axis=-1)
+
+
+def floor_gate_b(
+    t: np.ndarray,
+    tonset=0.0, donset=0.0, fhard=0.0, ftarget=0.0, wfirst=0.0, wsecond=0.0,
+    wmin=0.0, wtaurise=0.05, rng=None,
+) -> np.ndarray:
+    """Batched :func:`floor_gate`: one uniform per trial picks first / second / target opening."""
+    t = np.asarray(t, dtype=float)
+    if rng is None:
+        rng = np.random.default_rng()
+    n = max(np.size(x) for x in (tonset, donset, fhard, ftarget, wfirst, wsecond, wmin, wtaurise))
+    tonset, donset, fhard, ftarget, wfirst, wsecond, wmin, wtaurise = (
+        _b1d(x, n) for x in (tonset, donset, fhard, ftarget, wfirst, wsecond, wmin, wtaurise)
+    )
+    u = rng.random(n)
+    onset = np.where(
+        u < wfirst, np.maximum(fhard, np.minimum(tonset, donset)),
+        np.where(u < wfirst + wsecond, np.maximum(fhard, np.maximum(tonset, donset)),
+                 np.maximum(fhard + ftarget, tonset)))
+    return _soft_gate_b(t, onset, wtaurise, wmin)
+
+
 def hazard_gate_b(
     t: np.ndarray,
     tonset=0.0, toffset=1.0, tcoh=1.0, donset=0.0, doffset=1.0, dcoh=1.0,
@@ -1417,6 +1606,8 @@ softmax_gate.batched = softmax_gate_b
 conflict_bufferlin_drift.batched = conflict_bufferlin_drift_b
 delay_gate.batched = delay_gate_b
 wait_gate.batched = wait_gate_b
+conflict_buffermode_drift.batched = conflict_buffermode_drift_b
+floor_gate.batched = floor_gate_b
 hazard_gate.batched = hazard_gate_b
 hazard2.batched = hazard2_b
 

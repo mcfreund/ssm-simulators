@@ -95,6 +95,25 @@ drift_config = {
             "maxstimoffset",
         ],
     },
+    "conflict_buffermode_drift": {
+        "fun": df.conflict_buffermode_drift,
+        "params": [
+            "sumstart",
+            "sumend",
+            "diffstart",
+            "diffend",
+            "knot",
+            "hold",
+            "sumboost",
+            "diffboost",
+            "boostfwhm",
+            "tcoh",
+            "dcoh",
+            "tonset",
+            "donset",
+            "swap",
+        ],
+    },
     "conflict_dsstimflexpwlin_drift": {
         "fun": df.conflict_dsstimflexpwlin_drift,
         "params": [
@@ -178,5 +197,9 @@ weight_config = {
     "wait_gate": {
         "fun": df.wait_gate,
         "params": ["tonset", "donset", "ptonset", "wmin", "wtaurise"],
+    },
+    "floor_gate": {
+        "fun": df.floor_gate,
+        "params": ["tonset", "donset", "fhard", "ftarget", "wfirst", "wsecond", "wmin", "wtaurise"],
     },
 }

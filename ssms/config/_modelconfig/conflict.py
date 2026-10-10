@@ -151,6 +151,26 @@ def _bufferlin_drift_params():
     )
 
 
+def _buffermode_drift_params():
+    """Ideal-buffer drift in sum/difference modes: cue-locked ramp to a knot, simultaneity boost."""
+    return dict(
+        sumstart=_new_param(2.0, 0.0, 20.0),
+        sumend=_new_param(2.0, 0.0, 20.0),
+        diffstart=_new_param(1.0, -20.0, 20.0),
+        diffend=_new_param(1.0, -20.0, 20.0),
+        knot=_new_param(0.0, 0.0, 3.0),
+        hold=_new_param(1.0, 0.0, 1.0),
+        sumboost=_new_param(0.0, 0.0, 20.0),
+        diffboost=_new_param(0.0, -20.0, 20.0),
+        boostfwhm=_new_param(16 / 60, 1e-3, 3.0),
+        tcoh=_new_param(0.5, -1.0, 1.0),
+        dcoh=_new_param(-0.5, -1.0, 1.0),
+        tonset=_new_param(0.0, 0.0, 1.0),
+        donset=_new_param(0.0, 0.0, 1.0),
+        swap=_new_param(0.0, 0.0, 1.0),
+    )
+
+
 def _dsstimflexpwlin_drift_params():
     """Piecewise-linear (ramp-then-plateau) cue-locked drift; ``maxstimoffset`` is supplied.
 
@@ -207,6 +227,18 @@ def _wait_gate_params():
     """Gate opening at target onset w.p. ptonset, else at the second onset: leak floor, rise time."""
     return dict(
         ptonset=_new_param(0.5, 0.0, 1.0),
+        wmin=_new_param(0.0, 0.0, 1.0),
+        wtaurise=_new_param(0.05, 1e-3, 0.5),
+    )
+
+
+def _floor_gate_params():
+    """Gate opening at the first / second onset or the target, behind cue-locked floors."""
+    return dict(
+        fhard=_new_param(0.0, 0.0, 1.0),
+        ftarget=_new_param(0.0, 0.0, 2.0),
+        wfirst=_new_param(0.0, 0.0, 1.0),
+        wsecond=_new_param(0.0, 0.0, 1.0),
         wmin=_new_param(0.0, 0.0, 1.0),
         wtaurise=_new_param(0.05, 1e-3, 0.5),
     )
@@ -412,6 +444,22 @@ def get_conflict_bufferlin_waitgate_config():
         drift_fun=df.conflict_bufferlin_drift,
         weight_name="wait_gate",
         weight_fun=df.wait_gate,
+        choices=[-1, 1],
+        n_particles=1,
+        simulator=cssm.ddm_flex_weight,
+    )
+
+
+def get_conflict_buffermode_floorgate_config():
+    return _new_config(
+        name="conflict_buffermode_floorgate",
+        param_dict=_core_params() | _buffermode_drift_params() | _floor_gate_params(),
+        boundary_name="constant",
+        boundary=bf.constant,
+        drift_name="conflict_buffermode_drift",
+        drift_fun=df.conflict_buffermode_drift,
+        weight_name="floor_gate",
+        weight_fun=df.floor_gate,
         choices=[-1, 1],
         n_particles=1,
         simulator=cssm.ddm_flex_weight,
