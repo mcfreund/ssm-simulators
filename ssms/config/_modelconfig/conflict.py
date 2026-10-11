@@ -466,6 +466,23 @@ def get_conflict_buffermode_floorgate_config():
     )
 
 
+def get_conflict_buffermode_floorgate_weibull_config():
+    return _new_config(
+        name="conflict_buffermode_floorgate_weibull",
+        param_dict=_core_params() | _buffermode_drift_params() | _floor_gate_params()
+        | dict(alpha=_new_param(2.0, 0.1, 10.0), beta=_new_param(2.0, 0.05, 20.0)),
+        boundary_name="weibull_cdf",
+        boundary=bf.weibull_cdf,
+        drift_name="conflict_buffermode_drift",
+        drift_fun=df.conflict_buffermode_drift,
+        weight_name="floor_gate",
+        weight_fun=df.floor_gate,
+        choices=[-1, 1],
+        n_particles=1,
+        simulator=cssm.ddm_flex_weight,
+    )
+
+
 def get_conflict_dsstimflexpwlin_softmax_config():
     return _new_config(
         name="conflict_dsstimflexpwlin_softmax",

@@ -84,6 +84,14 @@ def weibull_cdf(
     return np.exp(-np.power(np.divide(t, beta), alpha))
 
 
+def weibull_cdf_b(t: np.ndarray, alpha=1, beta=1) -> np.ndarray:
+    """Batched :func:`weibull_cdf`: ``(n_trials,)`` params -> ``(n_trials, len(t))``."""
+    t = np.asarray(t, dtype=float)[None, :]
+    alpha = np.reshape(np.asarray(alpha, dtype=float), (-1, 1))
+    beta = np.reshape(np.asarray(beta, dtype=float), (-1, 1))
+    return np.exp(-np.power(t / beta, alpha))
+
+
 def conflict_gamma(
     t: float | np.ndarray = np.arange(  # noqa: B008
         0, 20, 0.1
@@ -122,3 +130,5 @@ angle: BoundaryFunction = angle  # noqa: PLW0127
 generalized_logistic: BoundaryFunction = generalized_logistic  # noqa: PLW0127
 weibull_cdf: BoundaryFunction = weibull_cdf  # noqa: PLW0127
 conflict_gamma: BoundaryFunction = conflict_gamma  # noqa: PLW0127
+
+weibull_cdf.batched = weibull_cdf_b

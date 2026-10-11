@@ -20,6 +20,7 @@ from .conflict import (
     get_conflict_bufferlin_delaygate_config,
     get_conflict_bufferlin_waitgate_config,
     get_conflict_buffermode_floorgate_config,
+    get_conflict_buffermode_floorgate_weibull_config,
     get_conflict_dsstimflexpwlin_hazard2_config,
     get_conflict_stimflex_logit_dualleak_config,
 )
@@ -217,6 +218,7 @@ def get_model_config():
         "conflict_bufferlin_delaygate": get_conflict_bufferlin_delaygate_config(),
         "conflict_bufferlin_waitgate": get_conflict_bufferlin_waitgate_config(),
         "conflict_buffermode_floorgate": get_conflict_buffermode_floorgate_config(),
+        "conflict_buffermode_floorgate_weibull": get_conflict_buffermode_floorgate_weibull_config(),
         "conflict_dsstimflexpwlin_hazard2": get_conflict_dsstimflexpwlin_hazard2_config(),
         "conflict_stimflex_logit_dualleak": get_conflict_stimflex_logit_dualleak_config(),
         "ornstein": get_ornstein_config(),
