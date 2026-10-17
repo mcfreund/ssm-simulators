@@ -1036,6 +1036,16 @@ def wait_gate(
     return soft_gate(t, onset, wtaurise, wmin)
 
 
+def _buffer_strength(tau, kernelh, kernelrise, kerneladapt):
+    """Buffer strength ``tau`` s after a stimulus's onset: the step response of a unit with
+    adaptation, 1 − (1 + h)·e^(−τ/rise) + h·e^(−τ/adapt) where ``kernelrise > 0`` (rises from 0,
+    overshoots when h > 0, settles at 1), and the ideal buffer's 1 where ``kernelrise <= 0``."""
+    x = np.maximum(tau, 0.0)
+    rise = np.where(kernelrise > 0, kernelrise, 1.0)
+    m = 1 - (1 + kernelh) * np.exp(-x / rise) + kernelh * np.exp(-x / kerneladapt)
+    return np.where(kernelrise > 0, m, 1.0)
+
+
 def _buffermode_rates(t, sumstart, sumend, diffstart, diffend, knot, hold,
                       sumboost, diffboost, boostfwhm, tonset, donset):
     """Target/distractor rates ``(v_T, v_D)`` from the sum/difference modes; broadcasts over params."""
@@ -1067,9 +1077,12 @@ def conflict_buffermode_drift(
     tonset: float = 0,
     donset: float = 0,
     swap: float = 0.0,
+    kernelh: float = 0.0,
+    kernelrise: float = 0.0,
+    kerneladapt: float = 1.0,
     sum_drifts: bool = True,
 ) -> np.ndarray:
-    """Conflict drift from ideal buffers, written in sum (Σ = v_T + v_D) and difference
+    """Conflict drift from sensory buffers, written in sum (Σ = v_T + v_D) and difference
     (Δ = v_T − v_D) modes::
 
         r(t)   = t / knot, capped at 1 if hold      (knot <= 0: r = 1, static)
@@ -1078,12 +1091,16 @@ def conflict_buffermode_drift(
         g      = exp(-4 ln2 * (tonset - donset)^2 / boostfwhm^2) * 1[t >= max(tonset, donset)]
         Σ >= 0, Δ clipped to [-Σ, Σ]
         v_T    = (Σ + Δ)/2,  v_D = (Σ - Δ)/2
-        drift  = tcoh * 1[t >= tonset] * v_T + dcoh * 1[t >= donset] * v_D
+        m(τ)   = 1 - (1 + kernelh) e^(-τ/kernelrise) + kernelh e^(-τ/kerneladapt)   (kernelrise > 0)
+               = 1                                                                (kernelrise <= 0)
+        drift  = tcoh * 1[t >= tonset] * m(t - tonset) * v_T
+               + dcoh * 1[t >= donset] * m(t - donset) * v_D
 
     ``swap > 0`` exchanges the two stimuli's roles: the distractor is read at v_T and the target at v_D.
     ``r`` is cue-locked: ``hold = 1`` ramps to the end values at ``knot`` and holds them,
     ``hold = 0`` continues the same line past ``knot``. The clip keeps ``v_T, v_D >= 0``.
-    ``g`` is the simultaneity boost, switched on at the second onset.
+    ``g`` is the simultaneity boost, switched on at the second onset. ``m`` is each buffer's
+    strength after its stimulus's onset; the defaults give ideal buffers.
 
     Arguments:
     ---------
@@ -1107,6 +1124,11 @@ def conflict_buffermode_drift(
             Onset time of the target/distractor stimulus (the buffer fills here).
         swap: float
             ``> 0`` reads the distractor at the target's rate and the target at the distractor's.
+        kernelh: float
+            Amplitude of the buffer's adapting overshoot (0: a plain rise).
+        kernelrise, kerneladapt: float
+            Rise and adaptation time constants (s) of the buffer; ``kernelrise <= 0`` is the
+            ideal buffer.
     """
     if t is None:
         t = np.arange(0, 20, 0.1)
@@ -1116,6 +1138,9 @@ def conflict_buffermode_drift(
                                sumboost, diffboost, boostfwhm, tonset, donset)
     tdrift = (t >= tonset) * tcoh * vt
     ddrift = (t >= donset) * dcoh * vd
+    if kernelrise > 0:
+        tdrift = tdrift * _buffer_strength(t - tonset, kernelh, kernelrise, kerneladapt)
+        ddrift = ddrift * _buffer_strength(t - donset, kernelh, kernelrise, kerneladapt)
     if sum_drifts:
         return tdrift + ddrift
     else:
@@ -1505,15 +1530,17 @@ def conflict_buffermode_drift_b(
     t: np.ndarray,
     sumstart=1.0, sumend=1.0, diffstart=0.0, diffend=0.0, knot=0.0, hold=1.0,
     sumboost=0.0, diffboost=0.0, boostfwhm=16 / 60,
-    tcoh=1.0, dcoh=1.0, tonset=0, donset=0, swap=0.0, sum_drifts=True,
+    tcoh=1.0, dcoh=1.0, tonset=0, donset=0, swap=0.0,
+    kernelh=0.0, kernelrise=0.0, kerneladapt=1.0, sum_drifts=True,
 ) -> np.ndarray:
-    """Batched :func:`conflict_buffermode_drift` (ideal buffers, sum/difference modes)."""
+    """Batched :func:`conflict_buffermode_drift` (sensory buffers, sum/difference modes)."""
     t = np.asarray(t, dtype=float)
     args = (sumstart, sumend, diffstart, diffend, knot, hold, sumboost, diffboost, boostfwhm,
-            tcoh, dcoh, tonset, donset, swap)
+            tcoh, dcoh, tonset, donset, swap, kernelh, kernelrise, kerneladapt)
     n = max(np.size(x) for x in args)
     (sumstart, sumend, diffstart, diffend, knot, hold, sumboost, diffboost, boostfwhm,
-     tcoh, dcoh, tonset, donset, swap) = (_b1d(x, n)[:, None] for x in args)
+     tcoh, dcoh, tonset, donset, swap, kernelh, kernelrise, kerneladapt) = (
+        _b1d(x, n)[:, None] for x in args)
     sw = swap > 0
     tcoh, dcoh = np.where(sw, dcoh, tcoh), np.where(sw, tcoh, dcoh)
     tonset, donset = np.where(sw, donset, tonset), np.where(sw, tonset, donset)
@@ -1523,6 +1550,9 @@ def conflict_buffermode_drift_b(
                                knot, hold, sumboost, diffboost, boostfwhm, tonset, donset)
     tdrift = (tt >= tonset) * tcoh * vt
     ddrift = (tt >= donset) * dcoh * vd
+    if np.any(kernelrise > 0):
+        tdrift = tdrift * _buffer_strength(tt - tonset, kernelh, kernelrise, kerneladapt)
+        ddrift = ddrift * _buffer_strength(tt - donset, kernelh, kernelrise, kerneladapt)
     if sum_drifts:
         return tdrift + ddrift
     return np.stack((tdrift, ddrift), axis=-1)

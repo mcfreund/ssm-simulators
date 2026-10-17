@@ -171,6 +171,15 @@ def _buffermode_drift_params():
     )
 
 
+def _buffer_kernel_params():
+    """Buffer strength after onset as a unit with adaptation: overshoot amplitude, rise, adaptation."""
+    return dict(
+        kernelh=_new_param(0.0, 0.0, 1000.0),
+        kernelrise=_new_param(0.0, 0.0, 1.0),
+        kerneladapt=_new_param(1.0, 1e-3, 5.0),
+    )
+
+
 def _dsstimflexpwlin_drift_params():
     """Piecewise-linear (ramp-then-plateau) cue-locked drift; ``maxstimoffset`` is supplied.
 
@@ -473,6 +482,42 @@ def get_conflict_buffermode_floorgate_weibull_config():
         | dict(alpha=_new_param(2.0, 0.1, 10.0), beta=_new_param(2.0, 0.05, 20.0)),
         boundary_name="weibull_cdf",
         boundary=bf.weibull_cdf,
+        drift_name="conflict_buffermode_drift",
+        drift_fun=df.conflict_buffermode_drift,
+        weight_name="floor_gate",
+        weight_fun=df.floor_gate,
+        choices=[-1, 1],
+        n_particles=1,
+        simulator=cssm.ddm_flex_weight,
+    )
+
+
+def get_conflict_buffermode_kernel_floorgate_weibull_config():
+    return _new_config(
+        name="conflict_buffermode_kernel_floorgate_weibull",
+        param_dict=_core_params() | _buffermode_drift_params() | _buffer_kernel_params()
+        | _floor_gate_params()
+        | dict(alpha=_new_param(2.0, 0.1, 10.0), beta=_new_param(2.0, 0.05, 20.0)),
+        boundary_name="weibull_cdf",
+        boundary=bf.weibull_cdf,
+        drift_name="conflict_buffermode_kernel_drift",
+        drift_fun=df.conflict_buffermode_drift,
+        weight_name="floor_gate",
+        weight_fun=df.floor_gate,
+        choices=[-1, 1],
+        n_particles=1,
+        simulator=cssm.ddm_flex_weight,
+    )
+
+
+def get_conflict_buffermode_floorgate_urgency_config():
+    return _new_config(
+        name="conflict_buffermode_floorgate_urgency",
+        param_dict=_core_params() | _buffermode_drift_params() | _floor_gate_params()
+        | dict(kcue=_new_param(0.0, 0.0, 20.0), kdec=_new_param(0.0, 0.0, 20.0),
+               tstart=_new_param(0.0, 0.0, 5.0)),
+        boundary_name="urgency_twoclock",
+        boundary=bf.urgency_twoclock,
         drift_name="conflict_buffermode_drift",
         drift_fun=df.conflict_buffermode_drift,
         weight_name="floor_gate",

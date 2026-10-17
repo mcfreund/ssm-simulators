@@ -92,6 +92,36 @@ def weibull_cdf_b(t: np.ndarray, alpha=1, beta=1) -> np.ndarray:
     return np.exp(-np.power(t / beta, alpha))
 
 
+# Two-clock urgency (multiplicative)
+def urgency_twoclock(
+    t: float | np.ndarray = 1, kcue: float = 0, kdec: float = 0, tstart: float = 0
+) -> np.ndarray:
+    """Bound divided by a linear urgency on two clocks, one from the cue and one from ``tstart``.
+
+    b(t) = 1 / (1 + kcue * t + kdec * max(0, t - tstart))
+
+    Arguments
+    ---------
+        t (float or np.ndarray, optional): Time point(s). Defaults to 1.
+        kcue (float, optional): Urgency slope on the clock from t = 0 (1/s). Defaults to 0.
+        kdec (float, optional): Urgency slope on the clock from ``tstart`` (1/s). Defaults to 0.
+        tstart (float, optional): Start of the second clock. Defaults to 0.
+
+    Returns
+    -------
+        np.ndarray: Array of boundary values, same shape as t
+    """
+    return 1 / (1 + kcue * np.asarray(t) + kdec * np.maximum(0, np.asarray(t) - tstart))
+
+
+def urgency_twoclock_b(t: np.ndarray, kcue=0, kdec=0, tstart=0) -> np.ndarray:
+    """Batched :func:`urgency_twoclock`: ``(n_trials,)`` params -> ``(n_trials, len(t))``."""
+    t = np.asarray(t, dtype=float)[None, :]
+    kcue, kdec, tstart = (np.reshape(np.asarray(x, dtype=float), (-1, 1))
+                          for x in (kcue, kdec, tstart))
+    return 1 / (1 + kcue * t + kdec * np.maximum(0, t - tstart))
+
+
 def conflict_gamma(
     t: float | np.ndarray = np.arange(  # noqa: B008
         0, 20, 0.1
@@ -129,6 +159,8 @@ constant: BoundaryFunction = constant  # noqa: PLW0127
 angle: BoundaryFunction = angle  # noqa: PLW0127
 generalized_logistic: BoundaryFunction = generalized_logistic  # noqa: PLW0127
 weibull_cdf: BoundaryFunction = weibull_cdf  # noqa: PLW0127
+urgency_twoclock: BoundaryFunction = urgency_twoclock  # noqa: PLW0127
 conflict_gamma: BoundaryFunction = conflict_gamma  # noqa: PLW0127
 
 weibull_cdf.batched = weibull_cdf_b
+urgency_twoclock.batched = urgency_twoclock_b
