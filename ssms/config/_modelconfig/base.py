@@ -141,6 +141,32 @@ drift_config = {
             "kerneladapt",
         ],
     },
+    "conflict_buffermode_readout_drift": {
+        "fun": df.conflict_buffermode_drift,
+        "params": [
+            "sumstart",
+            "sumend",
+            "diffstart",
+            "diffend",
+            "knot",
+            "hold",
+            "sumboost",
+            "diffboost",
+            "boostfwhm",
+            "tcoh",
+            "dcoh",
+            "tonset",
+            "donset",
+            "swap",
+            "kernelh",
+            "kernelrise",
+            "kerneladapt",
+            "sumpulse",
+            "rhopre",
+            "tresolve",
+            "pulsesel",
+        ],
+    },
     "conflict_dsstimflexpwlin_drift": {
         "fun": df.conflict_dsstimflexpwlin_drift,
         "params": [
@@ -227,6 +253,7 @@ weight_config = {
     },
     "floor_gate": {
         "fun": df.floor_gate,
-        "params": ["tonset", "donset", "fhard", "ftarget", "wfirst", "wsecond", "wmin", "wtaurise"],
+        "params": ["tonset", "donset", "fhard", "ftarget", "wfirst", "wsecond", "wmin", "wtaurise",
+                   "swap"],
     },
 }

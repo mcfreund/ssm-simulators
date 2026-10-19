@@ -180,6 +180,18 @@ def _buffer_kernel_params():
     )
 
 
+def _readout_params():
+    """Readout terms: an onset transient (its sum-mode peak and its selectivity as a fraction of
+    Δ/Σ), the selectivity before a resolution time, and a buffer kernel that may start flat."""
+    return dict(
+        sumpulse=_new_param(0.0, 0.0, 1000.0),
+        pulsesel=_new_param(0.0, 0.0, 1.0),
+        rhopre=_new_param(1.0, -1.0, 1.0),
+        tresolve=_new_param(0.0, 0.0, 20.0),
+        kernelh=_new_param(0.0, -1000.0, 1000.0),
+    )
+
+
 def _dsstimflexpwlin_drift_params():
     """Piecewise-linear (ramp-then-plateau) cue-locked drift; ``maxstimoffset`` is supplied.
 
@@ -501,6 +513,24 @@ def get_conflict_buffermode_kernel_floorgate_weibull_config():
         boundary_name="weibull_cdf",
         boundary=bf.weibull_cdf,
         drift_name="conflict_buffermode_kernel_drift",
+        drift_fun=df.conflict_buffermode_drift,
+        weight_name="floor_gate",
+        weight_fun=df.floor_gate,
+        choices=[-1, 1],
+        n_particles=1,
+        simulator=cssm.ddm_flex_weight,
+    )
+
+
+def get_conflict_buffermode_readout_floorgate_weibull_config():
+    return _new_config(
+        name="conflict_buffermode_readout_floorgate_weibull",
+        param_dict=_core_params() | _buffermode_drift_params() | _buffer_kernel_params()
+        | _readout_params() | _floor_gate_params()
+        | dict(alpha=_new_param(2.0, 0.1, 10.0), beta=_new_param(2.0, 0.05, 20.0)),
+        boundary_name="weibull_cdf",
+        boundary=bf.weibull_cdf,
+        drift_name="conflict_buffermode_readout_drift",
         drift_fun=df.conflict_buffermode_drift,
         weight_name="floor_gate",
         weight_fun=df.floor_gate,

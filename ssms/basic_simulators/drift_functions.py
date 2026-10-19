@@ -1046,8 +1046,26 @@ def _buffer_strength(tau, kernelh, kernelrise, kerneladapt):
     return np.where(kernelrise > 0, m, 1.0)
 
 
+def _onset_pulse(tau, kernelrise, kerneladapt):
+    """Onset transient ``tau`` s after a stimulus's onset, e^(−τ/adapt) − e^(−τ/rise) scaled to a
+    peak of 1 where ``kernelrise > 0`` (needs adapt > rise), and 0 where ``kernelrise <= 0``."""
+    x = np.maximum(tau, 0.0)
+    on = kernelrise > 0
+    rise = np.where(on, kernelrise, 0.5)
+    adapt = np.where(on, kerneladapt, 1.0)
+    q = rise / adapt
+    peak = q ** (q / (1 - q)) - q ** (1 / (1 - q))
+    return np.where(on, (np.exp(-x / adapt) - np.exp(-x / rise)) / peak, 0.0)
+
+
+def _selectivity(vt, vd):
+    """ρ = Δ/Σ from the role rates, 0 where Σ = 0."""
+    sig = vt + vd
+    return np.where(sig > 0, (vt - vd) / np.where(sig > 0, sig, 1.0), 0.0)
+
+
 def _buffermode_rates(t, sumstart, sumend, diffstart, diffend, knot, hold,
-                      sumboost, diffboost, boostfwhm, tonset, donset):
+                      sumboost, diffboost, boostfwhm, tonset, donset, rhopre=1.0, tresolve=0.0):
     """Target/distractor rates ``(v_T, v_D)`` from the sum/difference modes; broadcasts over params."""
     knot_safe = np.where(knot > 0, knot, 1.0)
     r = np.where(knot > 0, t / knot_safe, 1.0)
@@ -1058,6 +1076,7 @@ def _buffermode_rates(t, sumstart, sumend, diffstart, diffend, knot, hold,
     g = np.exp(-4.0 * np.log(2.0) * gap**2 / boostfwhm**2) * (t >= np.maximum(tonset, donset))
     sig = np.maximum(sig + sumboost * g, 0.0)
     dif = np.clip(dif + diffboost * g, -sig, sig)
+    dif = np.where(t < tresolve, rhopre * sig, dif)
     return (sig + dif) / 2, (sig - dif) / 2
 
 
@@ -1080,6 +1099,10 @@ def conflict_buffermode_drift(
     kernelh: float = 0.0,
     kernelrise: float = 0.0,
     kerneladapt: float = 1.0,
+    sumpulse: float = 0.0,
+    rhopre: float = 1.0,
+    tresolve: float = 0.0,
+    pulsesel: float = 0.0,
     sum_drifts: bool = True,
 ) -> np.ndarray:
     """Conflict drift from sensory buffers, written in sum (Σ = v_T + v_D) and difference
@@ -1090,17 +1113,24 @@ def conflict_buffermode_drift(
         Δ(t)   = diffend - (diffend - diffstart) * (1 - r(t))   + diffboost * g
         g      = exp(-4 ln2 * (tonset - donset)^2 / boostfwhm^2) * 1[t >= max(tonset, donset)]
         Σ >= 0, Δ clipped to [-Σ, Σ]
+        Δ(t)   = rhopre * Σ(t)   for t < tresolve
         v_T    = (Σ + Δ)/2,  v_D = (Σ - Δ)/2
         m(τ)   = 1 - (1 + kernelh) e^(-τ/kernelrise) + kernelh e^(-τ/kerneladapt)   (kernelrise > 0)
                = 1                                                                (kernelrise <= 0)
-        drift  = tcoh * 1[t >= tonset] * m(t - tonset) * v_T
-               + dcoh * 1[t >= donset] * m(t - donset) * v_D
+        p(τ)   = (e^(-τ/kerneladapt) - e^(-τ/kernelrise)) / its peak             (kernelrise > 0)
+               = 0                                                                (kernelrise <= 0)
+        drift  = tcoh * 1[t >= tonset] * (m(t - tonset) * v_T + sumpulse * (1 + pulsesel ρ) p(t - tonset) / 2)
+               + dcoh * 1[t >= donset] * (m(t - donset) * v_D + sumpulse * (1 - pulsesel ρ) p(t - donset) / 2)
+        ρ      = Δ / Σ   (0 where Σ = 0)
 
     ``swap > 0`` exchanges the two stimuli's roles: the distractor is read at v_T and the target at v_D.
     ``r`` is cue-locked: ``hold = 1`` ramps to the end values at ``knot`` and holds them,
     ``hold = 0`` continues the same line past ``knot``. The clip keeps ``v_T, v_D >= 0``.
     ``g`` is the simultaneity boost, switched on at the second onset. ``m`` is each buffer's
-    strength after its stimulus's onset; the defaults give ideal buffers.
+    strength after its stimulus's onset; the defaults give ideal buffers. ``p`` is an onset
+    transient of peak ``sumpulse`` in the sum mode and of peak ``pulsesel`` · ρ(t) · ``sumpulse``
+    in the difference mode (``pulsesel`` 0: the same for both roles). Before ``tresolve`` the
+    selectivity Δ/Σ is ``rhopre``. The defaults give no transient and no pre-resolution period.
 
     Arguments:
     ---------
@@ -1128,19 +1158,33 @@ def conflict_buffermode_drift(
             Amplitude of the buffer's adapting overshoot (0: a plain rise).
         kernelrise, kerneladapt: float
             Rise and adaptation time constants (s) of the buffer; ``kernelrise <= 0`` is the
-            ideal buffer.
+            ideal buffer. They also shape the onset transient.
+        sumpulse: float
+            Peak of the onset transient in the sum mode (0: none).
+        rhopre: float
+            Selectivity Δ/Σ before ``tresolve``.
+        tresolve: float
+            Cue-locked time (s) from which Δ follows its modes; ``<= 0`` is from the cue.
+        pulsesel: float
+            Selectivity of the onset transient as a fraction of the current ρ = Δ/Σ.
     """
     if t is None:
         t = np.arange(0, 20, 0.1)
     if swap > 0:
         tcoh, dcoh, tonset, donset = dcoh, tcoh, donset, tonset
     vt, vd = _buffermode_rates(t, sumstart, sumend, diffstart, diffend, knot, hold,
-                               sumboost, diffboost, boostfwhm, tonset, donset)
+                               sumboost, diffboost, boostfwhm, tonset, donset, rhopre, tresolve)
     tdrift = (t >= tonset) * tcoh * vt
     ddrift = (t >= donset) * dcoh * vd
     if kernelrise > 0:
         tdrift = tdrift * _buffer_strength(t - tonset, kernelh, kernelrise, kerneladapt)
         ddrift = ddrift * _buffer_strength(t - donset, kernelh, kernelrise, kerneladapt)
+    if sumpulse != 0:
+        sel = pulsesel * _selectivity(vt, vd)
+        tdrift = tdrift + (t >= tonset) * tcoh * sumpulse * (1 + sel) / 2 * _onset_pulse(
+            t - tonset, kernelrise, kerneladapt)
+        ddrift = ddrift + (t >= donset) * dcoh * sumpulse * (1 - sel) / 2 * _onset_pulse(
+            t - donset, kernelrise, kerneladapt)
     if sum_drifts:
         return tdrift + ddrift
     else:
@@ -1157,6 +1201,7 @@ def floor_gate(
     wsecond: float = 0.0,
     wmin: float = 0.0,
     wtaurise: float = 0.05,
+    swap: float = 0.0,
     rng=None,  # injected by cssm; unseeded fallback only when called standalone
 ) -> np.ndarray:
     """Gate that opens at the first onset, the second onset, or the target, behind a cue-locked floor::
@@ -1166,8 +1211,9 @@ def floor_gate(
              = max(fhard + ftarget, tonset)             otherwise
 
     ``fhard`` is a floor on every trial; ``ftarget`` is an additional floor on target-opened trials
-    (a per-trial value, drawn by the caller when it varies). One uniform is drawn per trial. The
-    chosen onset is passed to :func:`soft_gate`.
+    (a per-trial value, drawn by the caller when it varies). ``swap > 0`` exchanges the onsets, as
+    the drift does, so the target-opened gate waits for the distractor. One uniform is drawn per
+    trial. The chosen onset is passed to :func:`soft_gate`.
 
     Arguments
     ---------
@@ -1185,6 +1231,8 @@ def floor_gate(
             Leaky-closed floor before opening.
         wtaurise: float
             Rise time of the open transition.
+        swap: float
+            ``> 0`` exchanges the target's and the distractor's onsets.
         rng: np.random.Generator
             Injected by cssm; unseeded fallback only when called standalone.
     """
@@ -1192,6 +1240,8 @@ def floor_gate(
         t = np.arange(0, 20, 0.005)
     if rng is None:
         rng = np.random.default_rng()
+    if swap > 0:
+        tonset, donset = donset, tonset
     u = rng.random()
     if u < wfirst:
         onset = max(fhard, min(tonset, donset))
@@ -1531,28 +1581,38 @@ def conflict_buffermode_drift_b(
     sumstart=1.0, sumend=1.0, diffstart=0.0, diffend=0.0, knot=0.0, hold=1.0,
     sumboost=0.0, diffboost=0.0, boostfwhm=16 / 60,
     tcoh=1.0, dcoh=1.0, tonset=0, donset=0, swap=0.0,
-    kernelh=0.0, kernelrise=0.0, kerneladapt=1.0, sum_drifts=True,
+    kernelh=0.0, kernelrise=0.0, kerneladapt=1.0, sumpulse=0.0, rhopre=1.0, tresolve=0.0,
+    pulsesel=0.0, sum_drifts=True,
 ) -> np.ndarray:
     """Batched :func:`conflict_buffermode_drift` (sensory buffers, sum/difference modes)."""
     t = np.asarray(t, dtype=float)
     args = (sumstart, sumend, diffstart, diffend, knot, hold, sumboost, diffboost, boostfwhm,
-            tcoh, dcoh, tonset, donset, swap, kernelh, kernelrise, kerneladapt)
+            tcoh, dcoh, tonset, donset, swap, kernelh, kernelrise, kerneladapt,
+            sumpulse, rhopre, tresolve, pulsesel)
     n = max(np.size(x) for x in args)
     (sumstart, sumend, diffstart, diffend, knot, hold, sumboost, diffboost, boostfwhm,
-     tcoh, dcoh, tonset, donset, swap, kernelh, kernelrise, kerneladapt) = (
-        _b1d(x, n)[:, None] for x in args)
+     tcoh, dcoh, tonset, donset, swap, kernelh, kernelrise, kerneladapt,
+     sumpulse, rhopre, tresolve, pulsesel) = (_b1d(x, n)[:, None] for x in args)
     sw = swap > 0
     tcoh, dcoh = np.where(sw, dcoh, tcoh), np.where(sw, tcoh, dcoh)
     tonset, donset = np.where(sw, donset, tonset), np.where(sw, tonset, donset)
     tt = t[None, :]
-    static = not (np.any(knot > 0) or np.any(sumboost != 0) or np.any(diffboost != 0))
+    static = not (np.any(knot > 0) or np.any(sumboost != 0) or np.any(diffboost != 0)
+                  or np.any(tresolve > 0))
     vt, vd = _buffermode_rates(tt[:, :1] if static else tt, sumstart, sumend, diffstart, diffend,
-                               knot, hold, sumboost, diffboost, boostfwhm, tonset, donset)
+                               knot, hold, sumboost, diffboost, boostfwhm, tonset, donset,
+                               rhopre, tresolve)
     tdrift = (tt >= tonset) * tcoh * vt
     ddrift = (tt >= donset) * dcoh * vd
     if np.any(kernelrise > 0):
         tdrift = tdrift * _buffer_strength(tt - tonset, kernelh, kernelrise, kerneladapt)
         ddrift = ddrift * _buffer_strength(tt - donset, kernelh, kernelrise, kerneladapt)
+    if np.any(sumpulse != 0):
+        sel = pulsesel * _selectivity(vt, vd)
+        tdrift = tdrift + (tt >= tonset) * tcoh * sumpulse * (1 + sel) / 2 * _onset_pulse(
+            tt - tonset, kernelrise, kerneladapt)
+        ddrift = ddrift + (tt >= donset) * dcoh * sumpulse * (1 - sel) / 2 * _onset_pulse(
+            tt - donset, kernelrise, kerneladapt)
     if sum_drifts:
         return tdrift + ddrift
     return np.stack((tdrift, ddrift), axis=-1)
@@ -1561,16 +1621,19 @@ def conflict_buffermode_drift_b(
 def floor_gate_b(
     t: np.ndarray,
     tonset=0.0, donset=0.0, fhard=0.0, ftarget=0.0, wfirst=0.0, wsecond=0.0,
-    wmin=0.0, wtaurise=0.05, rng=None,
+    wmin=0.0, wtaurise=0.05, swap=0.0, rng=None,
 ) -> np.ndarray:
     """Batched :func:`floor_gate`: one uniform per trial picks first / second / target opening."""
     t = np.asarray(t, dtype=float)
     if rng is None:
         rng = np.random.default_rng()
-    n = max(np.size(x) for x in (tonset, donset, fhard, ftarget, wfirst, wsecond, wmin, wtaurise))
-    tonset, donset, fhard, ftarget, wfirst, wsecond, wmin, wtaurise = (
-        _b1d(x, n) for x in (tonset, donset, fhard, ftarget, wfirst, wsecond, wmin, wtaurise)
+    args = (tonset, donset, fhard, ftarget, wfirst, wsecond, wmin, wtaurise, swap)
+    n = max(np.size(x) for x in args)
+    tonset, donset, fhard, ftarget, wfirst, wsecond, wmin, wtaurise, swap = (
+        _b1d(x, n) for x in args
     )
+    sw = swap > 0
+    tonset, donset = np.where(sw, donset, tonset), np.where(sw, tonset, donset)
     u = rng.random(n)
     onset = np.where(
         u < wfirst, np.maximum(fhard, np.minimum(tonset, donset)),
