@@ -165,6 +165,9 @@ drift_config = {
             "rhopre",
             "tresolve",
             "pulsesel",
+            "swappre",
+            "tpulse",
+            "dpulse",
         ],
     },
     "conflict_dsstimflexpwlin_drift": {
