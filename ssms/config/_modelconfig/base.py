@@ -168,6 +168,11 @@ drift_config = {
             "swappre",
             "tpulse",
             "dpulse",
+            "tpulsegain",
+            "dpulsegain",
+            "toffset",
+            "doffset",
+            "bufferleak",
         ],
     },
     "conflict_dsstimflexpwlin_drift": {

@@ -182,8 +182,9 @@ def _buffer_kernel_params():
 
 def _readout_params():
     """Readout terms: an onset transient (its sum-mode peak, its selectivity as a fraction of Δ/Σ,
-    and its start times), the selectivity or a role swap before a resolution time, and a buffer
-    kernel that may start flat."""
+    its start times and per-stimulus gains), the selectivity or a role swap before a resolution
+    time, a buffer kernel that may start flat, and the buffers' leak after their stimuli's
+    offsets."""
     return dict(
         sumpulse=_new_param(0.0, 0.0, 1000.0),
         pulsesel=_new_param(0.0, 0.0, 1.0),
@@ -192,6 +193,11 @@ def _readout_params():
         swappre=_new_param(0.0, 0.0, 1.0),
         tpulse=_new_param(-1.0, -1.0, 20.0),
         dpulse=_new_param(-1.0, -1.0, 20.0),
+        tpulsegain=_new_param(1.0, 0.0, 2.0),
+        dpulsegain=_new_param(1.0, 0.0, 2.0),
+        toffset=_new_param(100.0, -1.0, 100.0),
+        doffset=_new_param(100.0, -1.0, 100.0),
+        bufferleak=_new_param(0.0, 0.0, 1000.0),
         kernelh=_new_param(0.0, -1000.0, 1000.0),
     )
 
