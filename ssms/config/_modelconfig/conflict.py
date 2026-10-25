@@ -184,7 +184,7 @@ def _readout_params():
     """Readout terms: an onset transient (its sum-mode peak, its selectivity as a fraction of Δ/Σ,
     its start times and per-stimulus gains), the selectivity or a role swap before a resolution
     time, a buffer kernel that may start flat, and the buffers' leak after their stimuli's
-    offsets."""
+    offsets (a shared rate and per-stimulus gains)."""
     return dict(
         sumpulse=_new_param(0.0, 0.0, 1000.0),
         pulsesel=_new_param(0.0, 0.0, 1.0),
@@ -198,6 +198,8 @@ def _readout_params():
         toffset=_new_param(100.0, -1.0, 100.0),
         doffset=_new_param(100.0, -1.0, 100.0),
         bufferleak=_new_param(0.0, 0.0, 1000.0),
+        tleakgain=_new_param(1.0, 0.0, 1000.0),
+        dleakgain=_new_param(1.0, 0.0, 1000.0),
         kernelh=_new_param(0.0, -1000.0, 1000.0),
     )
 
@@ -264,12 +266,14 @@ def _wait_gate_params():
 
 
 def _floor_gate_params():
-    """Gate opening at the first / second onset or the target, behind cue-locked floors."""
+    """Gate opening at the first / second onset, the distractor or the target, behind cue-locked
+    floors."""
     return dict(
         fhard=_new_param(0.0, 0.0, 1.0),
         ftarget=_new_param(0.0, 0.0, 2.0),
         wfirst=_new_param(0.0, 0.0, 1.0),
         wsecond=_new_param(0.0, 0.0, 1.0),
+        wdist=_new_param(0.0, 0.0, 1.0),
         wmin=_new_param(0.0, 0.0, 1.0),
         wtaurise=_new_param(0.05, 1e-3, 0.5),
     )

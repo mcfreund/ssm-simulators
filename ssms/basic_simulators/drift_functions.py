@@ -1112,6 +1112,8 @@ def conflict_buffermode_drift(
     toffset: float = 100.0,
     doffset: float = 100.0,
     bufferleak: float = 0.0,
+    tleakgain: float = 1.0,
+    dleakgain: float = 1.0,
     sum_drifts: bool = True,
 ) -> np.ndarray:
     """Conflict drift from sensory buffers, written in sum (Σ = v_T + v_D) and difference
@@ -1130,13 +1132,15 @@ def conflict_buffermode_drift(
                = 0                                                                (kernelrise <= 0)
         drift  = tcoh * (1[t >= tonset] m(t - tonset) L_T v_T + 1[t >= t_p] g_T sumpulse (1 + pulsesel ρ) p(t - t_p) / 2)
                + dcoh * (1[t >= donset] m(t - donset) L_D v_D + 1[t >= d_p] g_D sumpulse (1 - pulsesel ρ) p(t - d_p) / 2)
-        L_T    = exp(-bufferleak * max(0, t - toffset)),  L_D likewise from doffset
+        L_T    = exp(-tleakgain * bufferleak * max(0, t - toffset)),  L_D likewise with dleakgain
+                 from doffset
         t_p    = tpulse (tonset if tpulse < 0),  d_p = dpulse (donset if dpulse < 0)
         g_T    = tpulsegain,  g_D = dpulsegain
         ρ      = Δ / Σ   (0 where Σ = 0)
 
     ``swap > 0`` exchanges the two stimuli's roles: the distractor is read at v_T and the target at v_D;
-    each stimulus keeps its own coherence, onset, offset, transient start and transient gain.
+    each stimulus keeps its own coherence, onset, offset, transient start, transient gain and leak
+    gain.
     ``L`` is each buffer's leak after its stimulus's offset (``bufferleak`` 0: none).
     ``r`` is cue-locked: ``hold = 1`` ramps to the end values at ``knot`` and holds them,
     ``hold = 0`` continues the same line past ``knot``. The clip keeps ``v_T, v_D >= 0``.
@@ -1194,12 +1198,15 @@ def conflict_buffermode_drift(
             Offset time of the target/distractor stimulus (the buffer starts to leak here).
         bufferleak: float
             Leak rate (1/s) of each buffer after its stimulus's offset.
+        tleakgain, dleakgain: float
+            Gain on the target's/distractor's leak rate (1: the shared rate).
     """
     if t is None:
         t = np.arange(0, 20, 0.1)
     if swap > 0:
         tcoh, dcoh, tonset, donset, tpulse, dpulse = dcoh, tcoh, donset, tonset, dpulse, tpulse
         tpulsegain, dpulsegain, toffset, doffset = dpulsegain, tpulsegain, doffset, toffset
+        tleakgain, dleakgain = dleakgain, tleakgain
     tp = np.where(np.asarray(tpulse) < 0, tonset, tpulse)
     dp = np.where(np.asarray(dpulse) < 0, donset, dpulse)
     vt, vd = _buffermode_rates(t, sumstart, sumend, diffstart, diffend, knot, hold,
@@ -1211,8 +1218,8 @@ def conflict_buffermode_drift(
         tdrift = tdrift * _buffer_strength(t - tonset, kernelh, kernelrise, kerneladapt)
         ddrift = ddrift * _buffer_strength(t - donset, kernelh, kernelrise, kerneladapt)
     if bufferleak > 0:
-        tdrift = tdrift * np.exp(-bufferleak * np.maximum(t - toffset, 0.0))
-        ddrift = ddrift * np.exp(-bufferleak * np.maximum(t - doffset, 0.0))
+        tdrift = tdrift * np.exp(-tleakgain * bufferleak * np.maximum(t - toffset, 0.0))
+        ddrift = ddrift * np.exp(-dleakgain * bufferleak * np.maximum(t - doffset, 0.0))
     if sumpulse != 0:
         sel = pulsesel * _selectivity(vt, vd)
         tdrift = tdrift + (t >= tp) * tcoh * tpulsegain * sumpulse * (1 + sel) / 2 * _onset_pulse(
@@ -1236,16 +1243,19 @@ def floor_gate(
     wmin: float = 0.0,
     wtaurise: float = 0.05,
     swap: float = 0.0,
+    wdist: float = 0.0,
     rng=None,  # injected by cssm; unseeded fallback only when called standalone
 ) -> np.ndarray:
-    """Gate that opens at the first onset, the second onset, or the target, behind a cue-locked floor::
+    """Gate that opens at the first onset, the second onset, the distractor or the target, behind a
+    cue-locked floor::
 
         open = max(fhard, min(tonset, donset))          with probability wfirst
              = max(fhard, max(tonset, donset))          with probability wsecond
+             = max(fhard + ftarget, donset)             with probability wdist
              = max(fhard + ftarget, tonset)             otherwise
 
-    ``fhard`` is a floor on every trial; ``ftarget`` is an additional floor on target-opened trials
-    (a per-trial value, drawn by the caller when it varies). ``swap > 0`` exchanges the onsets, as
+    ``fhard`` is a floor on every trial; ``ftarget`` is an additional floor on trials opened by a
+    stimulus's identity (a per-trial value, drawn by the caller when it varies). ``swap > 0`` exchanges the onsets, as
     the drift does, so the target-opened gate waits for the distractor. One uniform is drawn per
     trial. The chosen onset is passed to :func:`soft_gate`.
 
@@ -1261,6 +1271,8 @@ def floor_gate(
             Additional floor (s) when the gate opens at the target.
         wfirst, wsecond: float
             Probability of opening at the first / second onset regardless of identity.
+        wdist: float
+            Probability of opening at the distractor behind both floors.
         wmin: float
             Leaky-closed floor before opening.
         wtaurise: float
@@ -1281,6 +1293,8 @@ def floor_gate(
         onset = max(fhard, min(tonset, donset))
     elif u < wfirst + wsecond:
         onset = max(fhard, max(tonset, donset))
+    elif u < wfirst + wsecond + wdist:
+        onset = max(fhard + ftarget, donset)
     else:
         onset = max(fhard + ftarget, tonset)
     return soft_gate(t, onset, wtaurise, wmin)
@@ -1617,25 +1631,28 @@ def conflict_buffermode_drift_b(
     tcoh=1.0, dcoh=1.0, tonset=0, donset=0, swap=0.0,
     kernelh=0.0, kernelrise=0.0, kerneladapt=1.0, sumpulse=0.0, rhopre=1.0, tresolve=0.0,
     pulsesel=0.0, swappre=0.0, tpulse=-1.0, dpulse=-1.0, tpulsegain=1.0, dpulsegain=1.0,
-    toffset=100.0, doffset=100.0, bufferleak=0.0, sum_drifts=True,
+    toffset=100.0, doffset=100.0, bufferleak=0.0, tleakgain=1.0, dleakgain=1.0,
+    sum_drifts=True,
 ) -> np.ndarray:
     """Batched :func:`conflict_buffermode_drift` (sensory buffers, sum/difference modes)."""
     t = np.asarray(t, dtype=float)
     args = (sumstart, sumend, diffstart, diffend, knot, hold, sumboost, diffboost, boostfwhm,
             tcoh, dcoh, tonset, donset, swap, kernelh, kernelrise, kerneladapt,
             sumpulse, rhopre, tresolve, pulsesel, swappre, tpulse, dpulse, tpulsegain, dpulsegain,
-            toffset, doffset, bufferleak)
+            toffset, doffset, bufferleak, tleakgain, dleakgain)
     n = max(np.size(x) for x in args)
     (sumstart, sumend, diffstart, diffend, knot, hold, sumboost, diffboost, boostfwhm,
      tcoh, dcoh, tonset, donset, swap, kernelh, kernelrise, kerneladapt,
      sumpulse, rhopre, tresolve, pulsesel, swappre, tpulse, dpulse, tpulsegain,
-     dpulsegain, toffset, doffset, bufferleak) = (_b1d(x, n)[:, None] for x in args)
+     dpulsegain, toffset, doffset, bufferleak, tleakgain, dleakgain) = (
+        _b1d(x, n)[:, None] for x in args)
     sw = swap > 0
     tcoh, dcoh = np.where(sw, dcoh, tcoh), np.where(sw, tcoh, dcoh)
     tonset, donset = np.where(sw, donset, tonset), np.where(sw, tonset, donset)
     toffset, doffset = np.where(sw, doffset, toffset), np.where(sw, toffset, doffset)
     tpulse, dpulse = np.where(sw, dpulse, tpulse), np.where(sw, tpulse, dpulse)
     tpulsegain, dpulsegain = np.where(sw, dpulsegain, tpulsegain), np.where(sw, tpulsegain, dpulsegain)
+    tleakgain, dleakgain = np.where(sw, dleakgain, tleakgain), np.where(sw, tleakgain, dleakgain)
     tp, dp = np.where(tpulse < 0, tonset, tpulse), np.where(dpulse < 0, donset, dpulse)
     tt = t[None, :]
     static = not (np.any(knot > 0) or np.any(sumboost != 0) or np.any(diffboost != 0)
@@ -1649,8 +1666,8 @@ def conflict_buffermode_drift_b(
         tdrift = tdrift * _buffer_strength(tt - tonset, kernelh, kernelrise, kerneladapt)
         ddrift = ddrift * _buffer_strength(tt - donset, kernelh, kernelrise, kerneladapt)
     if np.any(bufferleak > 0):
-        tdrift = tdrift * np.exp(-bufferleak * np.maximum(tt - toffset, 0.0))
-        ddrift = ddrift * np.exp(-bufferleak * np.maximum(tt - doffset, 0.0))
+        tdrift = tdrift * np.exp(-tleakgain * bufferleak * np.maximum(tt - toffset, 0.0))
+        ddrift = ddrift * np.exp(-dleakgain * bufferleak * np.maximum(tt - doffset, 0.0))
     if np.any(sumpulse != 0):
         sel = pulsesel * _selectivity(vt, vd)
         tdrift = tdrift + (tt >= tp) * tcoh * tpulsegain * sumpulse * (1 + sel) / 2 * _onset_pulse(
@@ -1665,15 +1682,16 @@ def conflict_buffermode_drift_b(
 def floor_gate_b(
     t: np.ndarray,
     tonset=0.0, donset=0.0, fhard=0.0, ftarget=0.0, wfirst=0.0, wsecond=0.0,
-    wmin=0.0, wtaurise=0.05, swap=0.0, rng=None,
+    wmin=0.0, wtaurise=0.05, swap=0.0, wdist=0.0, rng=None,
 ) -> np.ndarray:
-    """Batched :func:`floor_gate`: one uniform per trial picks first / second / target opening."""
+    """Batched :func:`floor_gate`: one uniform per trial picks first / second / distractor / target
+    opening."""
     t = np.asarray(t, dtype=float)
     if rng is None:
         rng = np.random.default_rng()
-    args = (tonset, donset, fhard, ftarget, wfirst, wsecond, wmin, wtaurise, swap)
+    args = (tonset, donset, fhard, ftarget, wfirst, wsecond, wmin, wtaurise, swap, wdist)
     n = max(np.size(x) for x in args)
-    tonset, donset, fhard, ftarget, wfirst, wsecond, wmin, wtaurise, swap = (
+    tonset, donset, fhard, ftarget, wfirst, wsecond, wmin, wtaurise, swap, wdist = (
         _b1d(x, n) for x in args
     )
     sw = swap > 0
@@ -1682,7 +1700,8 @@ def floor_gate_b(
     onset = np.where(
         u < wfirst, np.maximum(fhard, np.minimum(tonset, donset)),
         np.where(u < wfirst + wsecond, np.maximum(fhard, np.maximum(tonset, donset)),
-                 np.maximum(fhard + ftarget, tonset)))
+                 np.where(u < wfirst + wsecond + wdist, np.maximum(fhard + ftarget, donset),
+                          np.maximum(fhard + ftarget, tonset))))
     return _soft_gate_b(t, onset, wtaurise, wmin)
 
 

@@ -173,6 +173,8 @@ drift_config = {
             "toffset",
             "doffset",
             "bufferleak",
+            "tleakgain",
+            "dleakgain",
         ],
     },
     "conflict_dsstimflexpwlin_drift": {
@@ -262,6 +264,6 @@ weight_config = {
     "floor_gate": {
         "fun": df.floor_gate,
         "params": ["tonset", "donset", "fhard", "ftarget", "wfirst", "wsecond", "wmin", "wtaurise",
-                   "swap"],
+                   "swap", "wdist"],
     },
 }
