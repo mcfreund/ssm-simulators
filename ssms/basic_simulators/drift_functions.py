@@ -1064,15 +1064,31 @@ def _selectivity(vt, vd):
     return np.where(sig > 0, (vt - vd) / np.where(sig > 0, sig, 1.0), 0.0)
 
 
+def _two_ramps(t, start, mid, end, knotmid, knot, hold):
+    """A mode's line from ``start`` at the cue to ``mid`` at ``knotmid``, then to ``end`` at
+    ``knot``, held at ``end`` after ``knot`` where ``hold > 0``; needs 0 < knotmid < knot."""
+    t = np.where(hold > 0, np.minimum(t, knot), t)
+    early = mid - (mid - start) * (1.0 - t / np.where(knotmid > 0, knotmid, 1.0))
+    late = end - (end - mid) * (knot - t) / np.where(knot > knotmid, knot - knotmid, 1.0)
+    return np.where(t < knotmid, early, late)
+
+
 def _buffermode_rates(t, sumstart, sumend, diffstart, diffend, knot, hold,
                       sumboost, diffboost, boostfwhm, tonset, donset, rhopre=1.0, tresolve=0.0,
-                      swappre=0.0):
+                      swappre=0.0, knotmid=0.0, summid=0.0, diffmid=0.0):
     """Target/distractor rates ``(v_T, v_D)`` from the sum/difference modes; broadcasts over params."""
     knot_safe = np.where(knot > 0, knot, 1.0)
     r = np.where(knot > 0, t / knot_safe, 1.0)
     r = np.where(hold > 0, np.minimum(r, 1.0), r)
     sig = sumend - (sumend - sumstart) * (1.0 - r)
     dif = diffend - (diffend - diffstart) * (1.0 - r)
+
+    # A second knot at knotmid > 0 replaces the single line with two
+    if np.any(knotmid > 0):
+        sig = np.where(knotmid > 0, _two_ramps(t, sumstart, summid, sumend, knotmid, knot, hold),
+                       sig)
+        dif = np.where(knotmid > 0, _two_ramps(t, diffstart, diffmid, diffend, knotmid, knot, hold),
+                       dif)
     gap = tonset - donset
     g = np.exp(-4.0 * np.log(2.0) * gap**2 / boostfwhm**2) * (t >= np.maximum(tonset, donset))
     sig = np.maximum(sig + sumboost * g, 0.0)
@@ -1114,6 +1130,9 @@ def conflict_buffermode_drift(
     bufferleak: float = 0.0,
     tleakgain: float = 1.0,
     dleakgain: float = 1.0,
+    knotmid: float = 0.0,
+    summid: float = 0.0,
+    diffmid: float = 0.0,
     sum_drifts: bool = True,
 ) -> np.ndarray:
     """Conflict drift from sensory buffers, written in sum (Σ = v_T + v_D) and difference
@@ -1122,6 +1141,7 @@ def conflict_buffermode_drift(
         r(t)   = t / knot, capped at 1 if hold      (knot <= 0: r = 1, static)
         Σ(t)   = sumend  - (sumend  - sumstart)  * (1 - r(t))   + sumboost  * g
         Δ(t)   = diffend - (diffend - diffstart) * (1 - r(t))   + diffboost * g
+                 (0 < knotmid < knot: each line runs start -> mid at knotmid -> end at knot)
         g      = exp(-4 ln2 * (tonset - donset)^2 / boostfwhm^2) * 1[t >= max(tonset, donset)]
         Σ >= 0, Δ clipped to [-Σ, Σ]
         Δ(t)   = rhopre * Σ(t)   for t < tresolve   (-Δ(t) if swappre > 0)
@@ -1143,7 +1163,10 @@ def conflict_buffermode_drift(
     gain.
     ``L`` is each buffer's leak after its stimulus's offset (``bufferleak`` 0: none).
     ``r`` is cue-locked: ``hold = 1`` ramps to the end values at ``knot`` and holds them,
-    ``hold = 0`` continues the same line past ``knot``. The clip keeps ``v_T, v_D >= 0``.
+    ``hold = 0`` continues the same line past ``knot``. A second knot ``knotmid`` (0 < ``knotmid`` <
+    ``knot``; ``<= 0``: none) splits the ramp: Σ and Δ run linearly from their start values at the
+    cue to ``summid`` and ``diffmid`` at ``knotmid``, then to their end values at ``knot``, held or
+    continued after ``knot`` as above. The clip keeps ``v_T, v_D >= 0``.
     ``g`` is the simultaneity boost, switched on at the second onset. ``m`` is each buffer's
     strength after its stimulus's onset; the defaults give ideal buffers. ``p`` is an onset
     transient of peak ``sumpulse`` in the sum mode and of peak ``pulsesel`` · ρ(t) · ``sumpulse``
@@ -1200,6 +1223,10 @@ def conflict_buffermode_drift(
             Leak rate (1/s) of each buffer after its stimulus's offset.
         tleakgain, dleakgain: float
             Gain on the target's/distractor's leak rate (1: the shared rate).
+        knotmid: float
+            Cue-locked time (s) of the second knot, between the cue and ``knot``; ``<= 0`` is none.
+        summid, diffmid: float
+            Sum and difference mode at ``knotmid``.
     """
     if t is None:
         t = np.arange(0, 20, 0.1)
@@ -1211,7 +1238,7 @@ def conflict_buffermode_drift(
     dp = np.where(np.asarray(dpulse) < 0, donset, dpulse)
     vt, vd = _buffermode_rates(t, sumstart, sumend, diffstart, diffend, knot, hold,
                                sumboost, diffboost, boostfwhm, tonset, donset, rhopre, tresolve,
-                               swappre)
+                               swappre, knotmid, summid, diffmid)
     tdrift = (t >= tonset) * tcoh * vt
     ddrift = (t >= donset) * dcoh * vd
     if kernelrise > 0:
@@ -1632,19 +1659,19 @@ def conflict_buffermode_drift_b(
     kernelh=0.0, kernelrise=0.0, kerneladapt=1.0, sumpulse=0.0, rhopre=1.0, tresolve=0.0,
     pulsesel=0.0, swappre=0.0, tpulse=-1.0, dpulse=-1.0, tpulsegain=1.0, dpulsegain=1.0,
     toffset=100.0, doffset=100.0, bufferleak=0.0, tleakgain=1.0, dleakgain=1.0,
-    sum_drifts=True,
+    knotmid=0.0, summid=0.0, diffmid=0.0, sum_drifts=True,
 ) -> np.ndarray:
     """Batched :func:`conflict_buffermode_drift` (sensory buffers, sum/difference modes)."""
     t = np.asarray(t, dtype=float)
     args = (sumstart, sumend, diffstart, diffend, knot, hold, sumboost, diffboost, boostfwhm,
             tcoh, dcoh, tonset, donset, swap, kernelh, kernelrise, kerneladapt,
             sumpulse, rhopre, tresolve, pulsesel, swappre, tpulse, dpulse, tpulsegain, dpulsegain,
-            toffset, doffset, bufferleak, tleakgain, dleakgain)
+            toffset, doffset, bufferleak, tleakgain, dleakgain, knotmid, summid, diffmid)
     n = max(np.size(x) for x in args)
     (sumstart, sumend, diffstart, diffend, knot, hold, sumboost, diffboost, boostfwhm,
      tcoh, dcoh, tonset, donset, swap, kernelh, kernelrise, kerneladapt,
      sumpulse, rhopre, tresolve, pulsesel, swappre, tpulse, dpulse, tpulsegain,
-     dpulsegain, toffset, doffset, bufferleak, tleakgain, dleakgain) = (
+     dpulsegain, toffset, doffset, bufferleak, tleakgain, dleakgain, knotmid, summid, diffmid) = (
         _b1d(x, n)[:, None] for x in args)
     sw = swap > 0
     tcoh, dcoh = np.where(sw, dcoh, tcoh), np.where(sw, tcoh, dcoh)
@@ -1655,11 +1682,11 @@ def conflict_buffermode_drift_b(
     tleakgain, dleakgain = np.where(sw, dleakgain, tleakgain), np.where(sw, tleakgain, dleakgain)
     tp, dp = np.where(tpulse < 0, tonset, tpulse), np.where(dpulse < 0, donset, dpulse)
     tt = t[None, :]
-    static = not (np.any(knot > 0) or np.any(sumboost != 0) or np.any(diffboost != 0)
-                  or np.any(tresolve > 0))
+    static = not (np.any(knot > 0) or np.any(knotmid > 0) or np.any(sumboost != 0)
+                  or np.any(diffboost != 0) or np.any(tresolve > 0))
     vt, vd = _buffermode_rates(tt[:, :1] if static else tt, sumstart, sumend, diffstart, diffend,
                                knot, hold, sumboost, diffboost, boostfwhm, tonset, donset,
-                               rhopre, tresolve, swappre)
+                               rhopre, tresolve, swappre, knotmid, summid, diffmid)
     tdrift = (tt >= tonset) * tcoh * vt
     ddrift = (tt >= donset) * dcoh * vd
     if np.any(kernelrise > 0):

@@ -69,6 +69,7 @@ class SimpleThetaProcessor(AbstractThetaProcessor):
         "conflict_buffermode_floorgate_urgency",
         "conflict_buffermode_kernel_floorgate_weibull",
         "conflict_buffermode_readout_floorgate_weibull",
+        "conflict_buffermode_bend_floorgate_weibull",
         "conflict_dsstimflexpwlin_hazard2",
         "conflict_stimflex_logit_dualleak",
         "shrink_spot",
